@@ -1,0 +1,5 @@
+scanner/lex.go
+scanner/strace.go
+*.output
+.*
+!/.gitignore
