@@ -3,7 +3,7 @@ package config
 import (
 	"io/ioutil"
 	"encoding/json"
-	. "github.com/google/syzkaller/tools/moonshine/logging"
+	. "github.com/shankarapailoor/moonshine/logging"
 )
 
 type SyzStraceConfig struct {
