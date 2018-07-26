@@ -74,12 +74,9 @@ func NewContext(target *prog.Target) (ctx *Context) {
 
 func (ctx *Context) GenerateSeeds() distiller.Seeds {
 	var seeds distiller.Seeds = make([]*distiller.Seed, 0)
-	fmt.Printf("ctx depends on: %v\n", ctx.DependsOn)
 	for i, call := range(ctx.Prog.Calls) {
 		var dependsOn map[*prog.Call]int = nil
-		fmt.Printf("Call: %p\n", call)
 		if _, ok := ctx.DependsOn[call]; ok {
-			fmt.Printf("GENERATING DEPENDS ON\n")
 			dependsOn = ctx.DependsOn[call]
 		}
 		seeds.Add(distiller.NewSeed(call,
@@ -145,7 +142,6 @@ func ParseProg(trace *strace_types.Trace, target *prog.Target) (*Context, error)
 			continue
 		}
 		if call, err := parseCall(ctx); err == nil {
-			fmt.Printf("Parsed Call: %p\n", call)
 			if call == nil {
 				continue
 			}
@@ -174,7 +170,6 @@ func parseCall(ctx *Context) (*prog.Call, error) {
 		return nil, nil
 	}
 	retCall.Ret = strace_types.ReturnArg(ctx.CurrentSyzCall.Meta.Ret)
-	fmt.Printf("Parsing Call: %s\n", ctx.CurrentSyzCall.Meta.Name)
 
 	if call := ParseMemoryCall(ctx); call != nil {
 		return call, nil
@@ -267,7 +262,6 @@ func Parse_ArrayType(syzType *prog.ArrayType, straceType strace_types.Type, ctx 
 		if syzType.Dir() == prog.DirOut {
 			return GenDefaultArg(syzType, ctx), nil
 		}
-		fmt.Printf("Array Len: %d\n", a.Len)
 		for i := 0; i < a.Len; i++ {
 			if arg, err := parseArgs(syzType.Type, a.Elems[i], ctx); err == nil {
 				fmt.Printf("arg size: arg size: %d syzType name: %s syzType size: %d\n", arg.Size(), syzType.Type.Name(), syzType.Type.Size())
@@ -321,7 +315,6 @@ func Parse_StructType(syzType *prog.StructType, straceType strace_types.Type, ct
 func evalFields(syzFields []prog.Type, straceFields []strace_types.Type, ctx *Context) []prog.Arg {
 	args := make([]prog.Arg, 0)
 	j := 0
-	fmt.Printf("strace fields: %d\n", len(straceFields))
 	for i, _ := range(syzFields) {
 		if prog.IsPad(syzFields[i]) {
 			args = append(args, ctx.Target.DefaultArg(syzFields[i]))
@@ -519,7 +512,6 @@ func Parse_BufferType(syzType *prog.BufferType, straceType strace_types.Type, ct
 		Failf("Cannot parse type %#v for Buffer Type\n", straceType)
 	}
 	if !syzType.Varlen() {
-		fmt.Printf("Call: %s, Extending buffer\n", ctx.CurrentSyzCall.Meta.CallName)
 		bufVal = strace_types.GenBuff(bufVal, syzType.Size())
 		buf := make([]byte, syzType.Size())
 		valLen := len(bufVal)
@@ -573,7 +565,6 @@ func Parse_ConstType(syzType prog.Type, straceType strace_types.Type, ctx *Conte
 	}
 	switch a := straceType.(type) {
 	case *strace_types.Expression:
-		fmt.Printf("Expression: %s\n", a.String())
 		return strace_types.ConstArg(syzType, a.Eval(ctx.Target)), nil
 	case *strace_types.DynamicType:
 		return strace_types.ConstArg(syzType, a.BeforeCall.Eval(ctx.Target)), nil
@@ -807,7 +798,6 @@ func GenDefaultStraceType(syzType prog.Type) strace_types.Type {
 func SanitizeFilename(filename string) string {
 	var buf bytes.Buffer
 	splitStr := strings.Split(filename, `/`)
-	fmt.Printf("split: %v%s%d\n", splitStr, splitStr[0], len(splitStr))
 
 	if len(splitStr) >= 3 {
 		if strings.Compare(splitStr[0], "") == 0 {

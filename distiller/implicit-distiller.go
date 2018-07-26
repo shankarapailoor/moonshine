@@ -45,6 +45,7 @@ func (d *ImplicitDistiller) getHeavyHitters(seeds Seeds) Seeds {
 			contributing_seeds += 1
 		}
 	}
+	fmt.Printf("TOTAL HEAVY HITTERS: %d\n", contributing_seeds)
 	return heavyHitters
 }
 

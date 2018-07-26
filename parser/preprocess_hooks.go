@@ -4,7 +4,6 @@ import (
 	"github.com/shankarapailoor/moonshine/strace_types"
 	"github.com/google/syzkaller/prog"
 	. "github.com/shankarapailoor/moonshine/logging"
-	"fmt"
 )
 
 type PreprocessHook func(ctx *Context)
@@ -248,7 +247,6 @@ func Preprocess_Sendto(ctx *Context) {
 
 func Preprocess_ModifyLdt(ctx *Context) {
 	suffix := ""
-	fmt.Printf("PREPROCESS MODIFY LDT\n")
 	switch a := ctx.CurrentStraceCall.Args[0].(type) {
 	case *strace_types.Expression:
 		switch a.Eval(ctx.Target) {

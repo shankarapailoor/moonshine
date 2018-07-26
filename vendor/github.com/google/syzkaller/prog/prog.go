@@ -236,9 +236,7 @@ func MakeUnionArg(t Type, opt Arg) *UnionArg {
 }
 
 func (arg *UnionArg) Size() uint64 {
-	fmt.Printf("UNION ARG SIZE CALL\n")
 	if !arg.Type().Varlen() {
-		fmt.Printf("NOT VARLEN SIZE\n")
 		return arg.Type().Size()
 	}
 	return arg.Option.Size()

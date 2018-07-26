@@ -198,10 +198,8 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 		for _, a := range m.allocations[call] {
 			switch arg := a.arg.(type) {
 			case *PointerArg:
-				fmt.Printf("Before allocation arg: %d old offset: %d\n", i, offset)
 				arg.Address = offset
 				offset += a.num_bytes
-				fmt.Printf("Allocation for bpf prog: Arg: %d %d %d, new offset: %d\n", i, arg.Address, a.num_bytes, offset)
 				i += 1
 				if arg.Address >= memAllocMaxMem {
 					return fmt.Errorf("Call: %v, address out of range: %d\n", arg.Address)

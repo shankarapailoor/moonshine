@@ -22,7 +22,6 @@ type DistillerMetadata struct {
 func (d *DistillerMetadata) GetAllDownstreamDependents(seed *Seed, seen map[int]bool) []*prog.Call {
 	calls := make([]*prog.Call, 0)
 	callMap := make(map[*prog.Call]bool, 0)
-	fmt.Printf("Downstream: %s\n", seed.Call.Meta.CallName)
 	for idx, _ := range d.DownstreamDependents[seed] {
 		call := seed.Prog.Calls[idx]
 		if seen[idx] || idx == seed.CallIdx {
@@ -84,11 +83,9 @@ func (d *DistillerMetadata) TrackDependencies(prg *prog.Prog) {
 			continue
 		}
 		for _, arg := range call.Args {
-			fmt.Printf("Arg: %s, %v\n", call.Meta.CallName, arg)
 			upstream_maps := d.isDependent(arg, seed, seed.State, i, args)
 			/* upstream_maps: given a call at index k that uses arg, what are the upstream args that arg depends on? */
 			for k, argMap := range upstream_maps {
-				fmt.Printf("K: %d\n", k)
 				if d.UpstreamDependencyGraph[seed][k] == nil {
 					d.UpstreamDependencyGraph[seed][k] = make(map[prog.Arg][]prog.Arg, 0)
 				}
@@ -109,7 +106,6 @@ func (d *DistillerMetadata) TrackDependencies(prg *prog.Prog) {
 				d.DownstreamDependents[upstreamSeed][i] = true
 			}
 		}
-		fmt.Printf("depends on: %v\n", d.UpstreamDependencyGraph[seed])
 		if call.Ret != nil {
 			args[call.Ret] = i
 			call.Ret.Set(nil)
@@ -122,7 +118,6 @@ func (d *DistillerMetadata) BuildDependency(seed *Seed, distilledProg *prog.Prog
 		if s, ok := d.CallToSeed[call]; ok {
 			//fmt.Printf("HERE\n")
 			dependencyMap := d.UpstreamDependencyGraph[s]
-			fmt.Printf("dependency map: %v\n", dependencyMap)
 			for idx, argMap := range dependencyMap {
 				upstreamSeed := d.CallToSeed[seed.Prog.Calls[idx]]
 				for argK, argVs := range argMap {
@@ -246,9 +241,6 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 		}
 	case *prog.GroupArg:
 		for _, inner_arg := range a.Inner {
-			if prog.IsPad(inner_arg.Type()) {
-				fmt.Printf("FOUND PAD for index: %d\n", callIdx)
-			}
 			for k, argMap := range d.isDependent(inner_arg, seed, state, callIdx, args) {
 				if upstreamSet[k] == nil {
 					upstreamSet[k] = make(map[prog.Arg][]prog.Arg, 0)
@@ -278,14 +270,12 @@ func (d *DistillerMetadata) isDependent(arg prog.Arg, seed *Seed, state *tracker
 			if typ.ArgDir != prog.DirOut && len(a.Data()) != 0 {
 				switch typ.Kind {
 				case prog.BufferFilename:
-					fmt.Printf("DISTILLER FILE NAME: %#v\n", state.Files)
 					callMap := make(map[*prog.Call]bool, 0)
 					for s, calls := range state.Files {
 						if s == string(a.Data()) {
 							for _, call := range calls {
 								if _, ok := callMap[call]; !ok {
 									if d.CallToIdx[call] < seed.CallIdx {
-										fmt.Printf("LESS THAN\n")
 										d.UpstreamDependencyGraph[seed][d.CallToIdx[call]] = make(map[prog.Arg][]prog.Arg, 0)
 										callMap[call] = true
 									}

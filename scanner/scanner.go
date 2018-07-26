@@ -60,7 +60,6 @@ func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
 			continue
 
 		} else {
-			fmt.Printf("line: %s\n", line)
 			lex := newLexer(scanner.Bytes())
 			StraceParse(lex)
 			call := lex.result

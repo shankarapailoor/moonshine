@@ -2,7 +2,6 @@
 package scanner
 
 import (
-    "fmt"
     types "github.com/shankarapailoor/moonshine/strace_types"
 )
 %}
@@ -193,7 +192,7 @@ call_type:
 macro_type:
     FLAG LPAREN types RPAREN {$$ = types.NewMacroType($1, $3)}
     | FLAG LPAREN identifiers RPAREN {$$ = types.NewMacroType($1, nil)}
-    | KEYWORD LPAREN KEYWORD IDENTIFIER RPAREN {fmt.Printf("SIZEOF\n");$$ = types.NewMacroType($4, nil)}
+    | KEYWORD LPAREN KEYWORD IDENTIFIER RPAREN {$$ = types.NewMacroType($4, nil)}
 
 pointer_type:
     AND IDENTIFIER {$$ = types.NullPointer()}

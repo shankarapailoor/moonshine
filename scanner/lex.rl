@@ -70,7 +70,7 @@ func (lex *lexer) Lex(out *StraceSymType) int {
             identifier => {out.data = string(lex.data[lex.ts:lex.te]); tok = IDENTIFIER;fbreak;};
             unfinished => {tok = UNFINISHED; fbreak;};
             resumed => {tok = RESUMED; fbreak;};
-            keyword => {fmt.Printf("KEYWORD LEX\n"); tok = KEYWORD; fbreak;};
+            keyword => {tok = KEYWORD; fbreak;};
             mac => {out.data = string(lex.data[lex.ts : lex.te]); tok = MAC; fbreak;};
             or => {tok = OR; fbreak;};
             '=' => {tok = EQUALS;fbreak;};

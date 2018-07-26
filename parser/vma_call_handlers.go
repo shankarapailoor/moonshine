@@ -5,7 +5,6 @@ import (
 	"github.com/google/syzkaller/prog"
 	"github.com/shankarapailoor/moonshine/strace_types"
 	"github.com/shankarapailoor/moonshine/tracker"
-	"fmt"
 )
 
 const (
@@ -303,7 +302,6 @@ func AddDependency(start, length uint64, addr prog.Arg, ctx *Context) {
 		for _, dep := range mapping.GetUsedBy() {
 			dependsOn[ctx.Prog.Calls[dep.Callidx]] = dep.Callidx
 		}
-		fmt.Printf("CHECKING DEPENDS ON: %s %#v\n", ctx.CurrentSyzCall.Meta.Name, dependsOn)
 		ctx.DependsOn[ctx.CurrentSyzCall] = dependsOn
 		dep := tracker.NewMemDependency(len(ctx.Prog.Calls), addr, start, start+length)
 		mapping.AddDependency(dep)
