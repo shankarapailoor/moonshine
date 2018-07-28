@@ -1,0 +1,1040 @@
+diff --git a/capability.c b/capability.c
+index a3f06ea..4d0fac9 100644
+--- a/capability.c
++++ b/capability.c
+@@ -127,11 +127,14 @@ print_cap_data(struct tcb *const tcp, const kernel_ulong_t addr,
+ 		return;
+ 
+ 	tprints("{effective=");
+-	print_cap_bits(data[0].effective, len > 1 ? data[1].effective : 0);
++	//print_cap_bits(data[0].effective, len > 1 ? data[1].effective : 0);
++    tprintf("%zu", data[0].effective);
+ 	tprints(", permitted=");
+-	print_cap_bits(data[0].permitted, len > 1 ? data[1].permitted : 0);
++	//print_cap_bits(data[0].permitted, len > 1 ? data[1].permitted : 0);
++    tprintf("%zu", data[0].permitted);
+ 	tprints(", inheritable=");
+-	print_cap_bits(data[0].inheritable, len > 1 ? data[1].inheritable : 0);
++	//print_cap_bits(data[0].inheritable, len > 1 ? data[1].inheritable : 0);
++    tprintf("%zu", data[0].inheritable);
+ 	tprints("}");
+ }
+ 
+diff --git a/defs.h b/defs.h
+index b2be75b..22f6a58 100644
+--- a/defs.h
++++ b/defs.h
+@@ -58,6 +58,10 @@
+ #include "gcc_compat.h"
+ #include "sysent.h"
+ 
++#define KCOV_INIT_TRACE _IOR('c', 1, unsigned long)
++#define KCOV_ENABLE _IO('c', 100)
++#define COVER_SIZE (16 << 20)
++
+ #ifndef HAVE_STRERROR
+ const char *strerror(int);
+ #endif
+@@ -193,11 +197,18 @@ extern char *stpcpy(char *dst, const char *src);
+ # define PERSONALITY2_INCLUDE_FUNCS "empty.h"
+ #endif
+ 
++#define MAX_COMM_LEN 16
++
+ typedef struct ioctlent {
+ 	const char *symbol;
+ 	unsigned int code;
+ } struct_ioctlent;
+ 
++struct kcov_tsearch_entry {
++	unsigned long k;
++	const char *v;
++};
++
+ struct inject_opts {
+ 	uint16_t first;
+ 	uint16_t step;
+@@ -208,6 +219,19 @@ struct inject_opts {
+ #define MAX_ERRNO_VALUE			4095
+ #define INJECT_OPTS_RVAL_DEFAULT	(-(MAX_ERRNO_VALUE + 1))
+ 
++struct kcov_meta {
++    unsigned long mmap_area;
++    unsigned long parent_addr;
++	unsigned long need_setup;
++    unsigned long update_proc_meta;
++    unsigned long after_exec;
++	unsigned long buf_pos;
++	int is_main_tracee;
++	int fd;
++    pid_t parent;
++    char comm[MAX_COMM_LEN];
++};
++
+ /* Trace Control Block */
+ struct tcb {
+ 	int flags;		/* See below for TCB_ values */
+@@ -232,7 +256,7 @@ struct tcb {
+ 	struct timeval stime;	/* System time usage as of last process wait */
+ 	struct timeval dtime;	/* Delta for system time usage */
+ 	struct timeval etime;	/* Syscall entry time */
+-
++	struct kcov_meta kcov_meta;
+ #ifdef USE_LIBUNWIND
+ 	struct UPT_info* libunwind_ui;
+ 	struct mmap_cache_t* mmap_cache;
+@@ -285,7 +309,8 @@ struct tcb {
+ #define exiting(tcp)	((tcp)->flags & TCB_INSYSCALL)
+ #define syserror(tcp)	((tcp)->u_error != 0)
+ #define verbose(tcp)	((tcp)->qual_flg & QUAL_VERBOSE)
+-#define abbrev(tcp)	((tcp)->qual_flg & QUAL_ABBREV)
++/* #define abbrev(tcp)	((tcp)->qual_flg & QUAL_ABBREV) */
++#define abbrev(tcp)   0
+ #define filtered(tcp)	((tcp)->flags & TCB_FILTERED)
+ #define hide_log(tcp)	((tcp)->flags & TCB_HIDE_LOG)
+ 
+@@ -373,6 +398,7 @@ extern const char **paths_selected;
+ #define tracing_paths (paths_selected != NULL)
+ extern unsigned xflag;
+ extern unsigned followfork;
++extern unsigned int kcov_enabled;
+ #ifdef USE_LIBUNWIND
+ /* if this is true do the stack trace for every system call */
+ extern bool stack_trace_enabled;
+diff --git a/linux/x86_64/setup_kcov.c b/linux/x86_64/setup_kcov.c
+new file mode 100644
+index 0000000..6d6b3fb
+--- /dev/null
++++ b/linux/x86_64/setup_kcov.c
+@@ -0,0 +1,337 @@
++#include <sys/ptrace.h>
++#include <sys/wait.h>
++#include <sys/types.h>
++#include <sys/ioctl.h>
++#include <fcntl.h>
++#include <sys/mman.h>
++
++#define KCOV_INIT_TRACE _IOR('c', 1, unsigned long)
++#define KCOV_ENABLE _IO('c', 100)
++#define KCOV_DISABLE _IO('c', 101)
++#define COVER_SIZE (16 << 20)
++#define KCOV_TRACE_CMP 1
++
++
++int do_wait(pid_t pid, const char *name) {
++    int status;
++
++	if (waitpid(pid, &status, __WALL) == -1) {
++        perror("wait");
++        return -1;
++    }
++    if (WIFSTOPPED(status)) {
++        if (WSTOPSIG(status) == SIGTRAP) {
++            return 0;
++        }
++        fprintf(stderr, "%s unexpectedly got status %s\n", name, strsignal(status));
++        return -1;
++    } else if (WIFEXITED(status)) {
++        fprintf(stderr, "%s got unexpected status %d\n", name, status);
++    }
++    return -1;
++}
++
++int singlestep(pid_t pid) {
++    if (ptrace(PTRACE_SINGLESTEP, pid, NULL, NULL)) {
++        perror("PTRACE_SINGLESTEP");
++        return -1;
++    }
++    return do_wait(pid, "PTRACE_SINGLESTEP");
++}
++
++int poke_text(pid_t pid, void *where, void *new_text, void *old_text, size_t len) {
++    size_t copied;
++    long poke_data, peek_data;
++    if (len % sizeof(void *) != 0) {
++        fprintf(stderr, "invalid len, not a multiple of %zd\n", sizeof(void *));
++        return -1;
++    }
++
++	for (copied = 0; copied < len; copied += sizeof(poke_data)) {
++        memmove(&poke_data, new_text + copied, sizeof(poke_data));
++        if (old_text != NULL) {
++            errno = 0;
++            peek_data = ptrace(PTRACE_PEEKTEXT, pid, where + copied, NULL);
++            if (peek_data == -1 && errno) {
++                perror("PTRACE_PEEKTEXT");
++				return -1;
++			}
++            memmove(old_text + copied, &peek_data, sizeof(peek_data));
++        }
++		if (ptrace(PTRACE_POKETEXT, pid, where + copied, (void *)poke_data) < 0) {
++            perror("PTRACE_POKETEXT");
++			return -1;
++		}
++	}
++	return 0;
++}
++
++static unsigned long setup_kcov(pid_t pid, pid_t parent_pid, unsigned long parent_cover, int *kcov_fd) {
++	unsigned long cover_buffer;
++	unsigned long file_path;
++	struct user_regs_struct new_regs, old_regs;
++	uint8_t new_instruction[8];
++	uint8_t old_instruction[8];
++	int fd;
++
++	char path[32] = "/sys/kernel/debug/kcov\0";
++
++	if (ptrace(PTRACE_GETREGS, pid, NULL, &old_regs)) {
++        perror("PTRACE_GETREGS");
++        ptrace(PTRACE_DETACH, pid, NULL, NULL);
++        return -1;
++    }
++
++	new_instruction[0] = 0x0f; //syscall
++	new_instruction[1] = 0x05; //syscall
++	new_instruction[2] = 0xff; //jmp
++	new_instruction[3] = 0xe0; //rax
++
++
++	memmove(&new_regs, &old_regs, sizeof(new_regs));
++
++    //Replace the old instruction with new one and save old instruction
++    if (poke_text(pid, (void *) old_regs.rip, new_instruction, old_instruction, sizeof(new_instruction))) {
++        goto fail;
++    }
++
++    if (*kcov_fd) {
++        new_regs.rip = old_regs.rip;
++        new_regs.orig_rax = 16;
++        new_regs.rax = 16;
++        new_regs.rdi = *kcov_fd;
++        new_regs.rsi = KCOV_DISABLE;
++        new_regs.rdx = 0;
++
++        if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction))) {
++            goto fail;
++        }
++
++        // set the new registers with our syscall arguments
++        if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++            perror("PTRACE_SETREGS");
++            goto fail;
++        }
++
++        if (singlestep(pid))
++            goto fail;
++
++
++        if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++            perror("PTRACE_GETREGS");
++            goto fail;
++        }
++
++
++        new_regs.rip = old_regs.rip;
++        new_regs.orig_rax = 3;
++        new_regs.rax = 3;
++        new_regs.rdi = *kcov_fd;
++
++        if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction))) {
++            goto fail;
++        }
++
++        // set the new registers with our syscall arguments
++        if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++            perror("PTRACE_SETREGS");
++            goto fail;
++        }
++
++        if (singlestep(pid))
++            goto fail;
++
++
++        if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++            perror("PTRACE_GETREGS");
++            goto fail;
++        }
++    }
++    //Mmap memory in tracee for kcov file path
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 9; //mmap
++    new_regs.rax = 9; //mmap
++    new_regs.rdi = 0; //NULL
++    new_regs.rsi = PAGE_SIZE; //Length
++    new_regs.rdx = PROT_READ | PROT_WRITE; //Protection
++    new_regs.r10 = MAP_PRIVATE | MAP_ANONYMOUS; //Flags
++    new_regs.r8 = -1; //Fd
++    new_regs.r9 = 0; //Offset
++
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    if (singlestep(pid))
++        goto fail;
++
++    if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        return -1;
++    }
++
++    //address of mmap for file path
++    file_path = (unsigned long)new_regs.rax;
++
++    if ((void *)new_regs.rax == MAP_FAILED) {
++        fprintf(stderr, "failed to mmap\n");
++        goto fail;
++    }
++
++    //write kcov path to tracee's address space
++    if (poke_text(pid, (void *) file_path, path, NULL, sizeof(path)))
++        fprintf(stderr, "FAILED COPY\n");
++
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 2;
++    new_regs.rax = 2;
++    new_regs.rdi = file_path;
++    new_regs.rsi = O_CREAT|O_RDWR;
++    new_regs.rdx = 0;
++
++    if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction)))
++        goto fail;
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    if (singlestep(pid))
++        goto fail;
++
++    if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        return -1;
++    }
++
++    fd = new_regs.rax;
++    *kcov_fd = fd;
++
++    //Initialize trace
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 16;
++    new_regs.rax = 16;
++    new_regs.rdi = fd;
++    new_regs.rsi = KCOV_INIT_TRACE;
++    new_regs.rdx = COVER_SIZE;
++
++    if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction)))
++        goto fail;
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    if (singlestep(pid))
++        goto fail;
++
++
++    if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        return -1;
++    }
++
++    //Set up cover map in tracee
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 9; //MMAP
++    new_regs.rax = 9; //Default rax
++    new_regs.rdi = 0; //Pointer to the base
++    new_regs.rsi = COVER_SIZE*sizeof(unsigned long); //Length
++    new_regs.rdx = PROT_READ | PROT_WRITE; //Mode
++    new_regs.r10 = MAP_PRIVATE;
++    new_regs.r8 =  fd; //kcov file descriptor
++    new_regs.r9 = 0;
++
++    if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction)))
++        goto fail;
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    // invoke mmap(2)
++    if (singlestep(pid)) {
++        goto fail;
++    }
++
++	if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        return -1;
++    }
++
++    // this is the address of the memory we allocated
++    cover_buffer = (unsigned long)new_regs.rax;
++    if ((void *)new_regs.rax == MAP_FAILED) {
++        perror("mmap");
++		goto fail;
++	}
++    //Enable coverage
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 16;
++    new_regs.rax = 16;
++    new_regs.rdi = fd;
++    new_regs.rsi = KCOV_ENABLE;
++    new_regs.rdx = 0;
++
++    if (poke_text(pid, (void *) old_regs.rip, new_instruction, NULL, sizeof(new_instruction)))
++        goto fail;
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    if (singlestep(pid))
++        goto fail;
++
++    if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        goto fail;
++    }
++
++    new_regs.rip = old_regs.rip;
++    new_regs.orig_rax = 11;
++    new_regs.rax = 11;
++    new_regs.rdi = file_path;
++    new_regs.rsi = PAGE_SIZE;
++
++    // set the new registers with our syscall arguments
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++    if (singlestep(pid))
++        goto fail;
++
++    if (ptrace(PTRACE_GETREGS, pid, NULL, &new_regs)) {
++        perror("PTRACE_GETREGS");
++        return -1;
++    }
++
++    //Restore old instruction
++    if (poke_text(pid, (void *) old_regs.rip, old_instruction, NULL, sizeof(old_instruction)))
++        goto fail;
++
++    //Restore old registers
++    //old_regs.rax = old_regs.orig_rax;
++    if (ptrace(PTRACE_SETREGS, pid, NULL, &old_regs)) {
++        perror("PTRACE_SETREGS");
++        goto fail;
++    }
++
++	return (unsigned long) cover_buffer;
++
++fail:
++	exit(1);
++}
+diff --git a/msghdr.c b/msghdr.c
+index 56ba549..d219a94 100644
+--- a/msghdr.c
++++ b/msghdr.c
+@@ -256,6 +256,7 @@ decode_msg_control(struct tcb *const tcp, const kernel_ulong_t addr,
+ 		   const kernel_ulong_t in_control_len)
+ {
+ 	if (!in_control_len)
++        tprints(", msg_control=NULL");
+ 		return;
+ 	tprints(", msg_control=");
+ 
+diff --git a/net.c b/net.c
+index 314e02a..e757564 100644
+--- a/net.c
++++ b/net.c
+@@ -90,6 +90,7 @@
+ void
+ print_ifindex(unsigned int ifindex)
+ {
++/*
+ #ifdef HAVE_IF_INDEXTONAME
+ 	char buf[IFNAMSIZ + 1];
+ 
+@@ -100,6 +101,7 @@ print_ifindex(unsigned int ifindex)
+ 		return;
+ 	}
+ #endif
++*/
+ 	tprintf("%u", ifindex);
+ }
+ 
+@@ -262,7 +264,7 @@ SYS_FUNC(sendto)
+ {
+ 	printfd(tcp, tcp->u_arg[0]);
+ 	tprints(", ");
+-	decode_sockbuf(tcp, tcp->u_arg[0], tcp->u_arg[1], tcp->u_arg[2]);
++	printstrn(tcp, tcp->u_arg[1], tcp->u_arg[2]);
+ 	tprintf(", %" PRI_klu ", ", tcp->u_arg[2]);
+ 	/* flags */
+ 	printflags(msg_flags, tcp->u_arg[3], "MSG_???");
+diff --git a/sendfile.c b/sendfile.c
+index 7faf1ca..5cbc337 100644
+--- a/sendfile.c
++++ b/sendfile.c
+@@ -39,10 +39,11 @@ SYS_FUNC(sendfile64)
+ 			return RVAL_DECODED;
+ 		}
+ 	} else {
++        /*
+ 		if (!syserror(tcp) && tcp->u_rval) {
+ 			tprints(" => ");
+ 			printnum_int64(tcp, tcp->u_arg[2], "%" PRIu64);
+-		}
++		}*/
+ 		tprintf(", %" PRI_klu, tcp->u_arg[3]);
+ 	}
+ 
+diff --git a/strace.c b/strace.c
+index 7214e6e..4022371 100644
+--- a/strace.c
++++ b/strace.c
+@@ -36,10 +36,15 @@
+ #include <sys/resource.h>
+ #include <sys/wait.h>
+ #include <sys/stat.h>
++#include <sys/types.h>
++#include <sys/mman.h>
++#include <sys/ioctl.h>
++#include <string.h>
+ #include <pwd.h>
+ #include <grp.h>
+ #include <dirent.h>
+ #include <sys/utsname.h>
++#include <string.h>
+ #ifdef HAVE_PRCTL
+ # include <sys/prctl.h>
+ #endif
+@@ -74,6 +79,8 @@ const unsigned int syscall_trap_sig = SIGTRAP | 0x80;
+ 
+ cflag_t cflag = CFLAG_NONE;
+ unsigned int followfork = 0;
++unsigned int kcov_enabled = 0;
++unsigned long *main_tracee_cover = NULL;
+ unsigned int ptrace_setoptions = PTRACE_O_TRACESYSGOOD | PTRACE_O_TRACEEXEC
+ 				 | PTRACE_O_TRACEEXIT;
+ unsigned int xflag = 0;
+@@ -740,6 +747,9 @@ alloctcb(int pid)
+ 		if (!tcp->pid) {
+ 			memset(tcp, 0, sizeof(*tcp));
+ 			tcp->pid = pid;
++            tcp->kcov_meta.parent_addr = 0;
++            tcp->kcov_meta.parent = 0;
++            tcp->kcov_meta.mmap_area = 0;
+ #if SUPPORTED_PERSONALITIES > 1
+ 			tcp->currpers = current_personality;
+ #endif
+@@ -1301,7 +1311,7 @@ startup_child(char **argv)
+ 	const char *filename;
+ 	size_t filename_len;
+ 	char pathname[PATH_MAX];
+-	int pid;
++	int pid, kcov_fd;
+ 	struct tcb *tcp;
+ 
+ 	filename = argv[0];
+@@ -1375,7 +1385,21 @@ startup_child(char **argv)
+ 	 * It's hard to know when that happens, so we just leak it.
+ 	 */
+ 	params_for_tracee.pathname = NOMMU_SYSTEM ? xstrdup(pathname) : pathname;
+-
++	if (kcov_enabled) {
++		kcov_fd = open("/sys/kernel/debug/kcov", O_RDWR);
++		if (kcov_fd == -1)
++			perror_msg_and_die("open");
++		if (ioctl(kcov_fd, KCOV_INIT_TRACE, COVER_SIZE))
++			perror_msg_and_die("ioctl");
++		main_tracee_cover = (unsigned long *) mmap(NULL,
++							COVER_SIZE * sizeof(unsigned long),
++							PROT_READ | PROT_WRITE,
++							MAP_SHARED,
++							kcov_fd,
++							0);
++		if ((void *)main_tracee_cover == MAP_FAILED)
++			perror_msg_and_die("mmap");
++	}
+ #if defined HAVE_PRCTL && defined PR_SET_PTRACER && defined PR_SET_PTRACER_ANY
+ 	if (daemonized_tracer)
+ 		prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY);
+@@ -1392,6 +1416,11 @@ startup_child(char **argv)
+ 		 * -D: we are parent
+ 		 * not -D: we are child
+ 		 */
++		if (kcov_enabled) {
++			if (ioctl(kcov_fd, KCOV_ENABLE, 0))
++				perror_msg_and_die("ioctl");
++		}
++
+ 		exec_or_die();
+ 	}
+ 
+@@ -1433,6 +1462,10 @@ startup_child(char **argv)
+ 		tcp->flags |= TCB_ATTACHED | TCB_STARTUP
+ 			    | TCB_SKIP_DETACH_ON_FIRST_EXEC
+ 			    | (NOMMU_SYSTEM ? 0 : (TCB_HIDE_LOG | post_attach_sigstop));
++		if (kcov_enabled) {
++			tcp->kcov_meta.mmap_area = (unsigned long) main_tracee_cover;
++			tcp->kcov_meta.is_main_tracee = 1;
++		}
+ 		newoutf(tcp);
+ 	}
+ 	else {
+@@ -1606,7 +1639,7 @@ init(int argc, char *argv[])
+ #endif
+ 	qualify("signal=all");
+ 	while ((c = getopt(argc, argv,
+-		"+b:cCdfFhiqrtTvVwxyz"
++		"+b:cCdkfFhiqrtTvVwxyz"
+ #ifdef USE_LIBUNWIND
+ 		"k"
+ #endif
+@@ -1646,6 +1679,9 @@ init(int argc, char *argv[])
+ 		case 'h':
+ 			usage();
+ 			break;
++		case 'k':
++			kcov_enabled=1;
++			break;
+ 		case 'i':
+ 			iflag = 1;
+ 			break;
+@@ -1735,6 +1771,7 @@ init(int argc, char *argv[])
+ 		}
+ 	}
+ 	argv += optind;
++	printf("KCOV ENABLED: %u\n", kcov_enabled);
+ 	/* argc -= optind; - no need, argc is not used below */
+ 
+ 	acolumn_spaces = xmalloc(acolumn + 1);
+@@ -1925,6 +1962,7 @@ init(int argc, char *argv[])
+ 	print_pid_pfx = (outfname && followfork < 2 && (followfork == 1 || nprocs > 1));
+ }
+ 
++
+ static struct tcb *
+ pid2tcb(int pid)
+ {
+@@ -1942,6 +1980,37 @@ pid2tcb(int pid)
+ 	return NULL;
+ }
+ 
++
++static void
++set_process_metadata(struct tcb *tcp)
++{
++    struct tcb *parent_tcp;
++    char buffer[BUFSIZ];
++    sprintf(buffer, "/proc/%d/stat", tcp->pid);
++    FILE* fp = fopen(buffer, "r");
++    if (fp) {
++        size_t size = fread(buffer, sizeof (char), sizeof (buffer), fp);
++        if (size > 0) {
++            // See: http://man7.org/linux/man-pages/man5/proc.5.html section /proc/[pid]/stat
++            strtok(buffer, " "); // (1) pid  %d
++            char *comm = strtok(NULL, " "); // (2) comm  %s
++            //fprintf(stderr, "process name: %s\n", comm);
++            strncpy(tcp->kcov_meta.comm, comm, MAX_COMM_LEN);
++            char * state = strtok(NULL, " "); // (3) state  %c
++            char * s_ppid = strtok(NULL, " "); // (4) ppid  %d
++			tcp->kcov_meta.parent = atoi(s_ppid);
++			//fprintf(stderr, "parent name: %d\n", tcp->kcov_meta.parent);
++            if ((parent_tcp = pid2tcb(tcp->kcov_meta.parent))) {
++                if (parent_tcp->kcov_meta.is_main_tracee) {
++                    tcp->kcov_meta.parent = 0;
++                    tcp->kcov_meta.parent_addr = 0;
++                }
++            }
++        }
++        fclose(fp);
++    }
++}
++
+ static void
+ cleanup(void)
+ {
+@@ -2041,8 +2110,15 @@ maybe_allocate_tcb(const int pid, int status)
+ 	}
+ 	if (followfork) {
+ 		/* We assume it's a fork/vfork/clone child */
++
+ 		struct tcb *tcp = alloctcb(pid);
+-		tcp->flags |= TCB_ATTACHED | TCB_STARTUP | post_attach_sigstop;
++        tcp->flags |= TCB_ATTACHED | TCB_STARTUP | post_attach_sigstop;
++
++        set_process_metadata(tcp);
++
++		tcp->kcov_meta.is_main_tracee = false;
++		tcp->kcov_meta.need_setup = 1;
++		tcp->kcov_meta.buf_pos = 0;
+ 		newoutf(tcp);
+ 		if (!qflag)
+ 			error_msg("Process %d attached", pid);
+@@ -2318,6 +2394,11 @@ trace(void)
+ 		 * PTRACE_GETEVENTMSG returns old pid starting from Linux 3.0.
+ 		 * On 2.6 and earlier, it can return garbage.
+ 		 */
++		if (kcov_enabled) {
++			if (tcp->kcov_meta.is_main_tracee) {
++				//Need to update the process metadata
++			}
++		}
+ 		if (os_release >= KERNEL_VERSION(3,0,0))
+ 			tcp = maybe_switch_tcbs(tcp, pid);
+ 
+@@ -2456,6 +2537,10 @@ show_stopsig:
+ 	 * Handle it.
+ 	 */
+ 	sig = 0;
++    if (kcov_enabled) {
++        if (tcp->kcov_meta.update_proc_meta)
++            set_process_metadata(tcp);
++    }
+ 	if (trace_syscall(tcp, &sig) < 0) {
+ 		/*
+ 		 * ptrace() failed in trace_syscall().
+diff --git a/syscall.c b/syscall.c
+index 569055f..5399b61 100644
+--- a/syscall.c
++++ b/syscall.c
+@@ -30,20 +30,23 @@
+  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+  */
+-
+ #include "defs.h"
+ #include "native_defs.h"
+ #include "nsig.h"
+ #include <sys/param.h>
+-
++#include <sys/types.h>
++#include <sys/wait.h>
+ /* for struct iovec */
+ #include <sys/uio.h>
++#include <search.h>
+ 
+ /* for __X32_SYSCALL_BIT */
+ #include <asm/unistd.h>
+ 
+ #include "regs.h"
+ #include "ptrace.h"
++#include "setup_kcov.c"
++
+ 
+ #if defined(SPARC64)
+ # undef PTRACE_GETREGS
+@@ -562,6 +565,7 @@ static int arch_set_scno(struct tcb *, kernel_ulong_t);
+ static void get_error(struct tcb *, const bool);
+ static int arch_set_error(struct tcb *);
+ static int arch_set_success(struct tcb *);
++static unsigned long setup_kcov(pid_t, pid_t, unsigned long, int *);
+ 
+ struct inject_opts *inject_vec[SUPPORTED_PERSONALITIES];
+ 
+@@ -572,7 +576,20 @@ tcb_inject_opts(struct tcb *tcp)
+ 	       ? &tcp->inject_vec[current_personality][tcp->scno] : NULL;
+ }
+ 
++unsigned long get_pos(struct tcb *tcp) {
++	int n;
++
+ 
++	if (!tcp->kcov_meta.mmap_area)
++		return -1;
++
++	if (tcp->kcov_meta.is_main_tracee)
++		return __atomic_load_n((unsigned long *)tcp->kcov_meta.mmap_area, __ATOMIC_RELAXED);
++	if ((n = ptrace(PTRACE_PEEKDATA, tcp->pid, tcp->kcov_meta.mmap_area, NULL)) < 0) {
++		perror("PTRACE_PEEKDATA");
++	}
++    return n;
++}
+ static long
+ tamper_with_syscall_entering(struct tcb *tcp, unsigned int *signo)
+ {
+@@ -637,12 +654,13 @@ tamper_with_syscall_exiting(struct tcb *tcp)
+ 	return 0;
+ }
+ 
++
+ static int
+ trace_syscall_entering(struct tcb *tcp, unsigned int *sig)
+ {
+ 	int res, scno_good;
+ 
+-	scno_good = res = get_scno(tcp);
++    scno_good = res = get_scno(tcp);
+ 	if (res == 0)
+ 		return res;
+ 	if (res == 1)
+@@ -655,9 +673,15 @@ trace_syscall_entering(struct tcb *tcp, unsigned int *sig)
+ 		 * " <unavailable>" will be added later by the code which
+ 		 * detects ptrace errors.
+ 		 */
++
+ 		goto ret;
+ 	}
+ 
++
++    if (Tflag || cflag)
++        gettimeofday(&tcp->etime, NULL);
++
++
+ #ifdef LINUX_MIPSO32
+ 	if (SEN_syscall == tcp->s_ent->sen)
+ 		decode_mips_subcall(tcp);
+@@ -730,13 +754,21 @@ trace_syscall_entering(struct tcb *tcp, unsigned int *sig)
+ 	else
+ 		res = tcp->s_ent->sys_func(tcp);
+ 
++
+ 	fflush(tcp->outf);
+  ret:
++
++	/* Measure the entrance time as late as possible to avoid errors. */
++	if (kcov_enabled) {
++		int n = get_pos(tcp);
++
++		tcp->kcov_meta.buf_pos = (n >= 0) ? n: 0;
++	}
+ 	tcp->flags |= TCB_INSYSCALL;
+ 	tcp->sys_func_rval = res;
+-	/* Measure the entrance time as late as possible to avoid errors. */
+ 	if (Tflag || cflag)
+ 		gettimeofday(&tcp->etime, NULL);
++    //fprintf(stderr, "finished tracing enter\n");
+ 	return res;
+ }
+ 
+@@ -746,6 +778,126 @@ syscall_tampered(struct tcb *tcp)
+ 	return tcp->flags & TCB_TAMPERED;
+ }
+ 
++int kcov_compare_func(const void *l, const void *r) {
++	const struct kcov_tsearch_entry *ml = l;
++	const struct kcov_tsearch_entry *mr = r;
++
++	if (ml->k < mr->k)
++		return -1;
++	else if (ml->k > mr->k)
++		return 1;
++	return 0;
++}
++
++struct kcov_tsearch_entry *make_entry(unsigned long ip) {
++	struct kcov_tsearch_entry *e;
++
++	e = (struct kcov_tsearch_entry*) calloc(sizeof(struct kcov_tsearch_entry), 0);
++	if (!e) {
++		printf("out of memory\n");
++		exit(EXIT_FAILURE);
++	}
++
++	e->k = ip;
++	e->v = "";
++    return e;
++}
++
++void kcov_free_func(void *mt_data) {
++	struct kcov_tsearch_entry *m = mt_data;
++	if(!m) {
++		return;
++	}
++	free(m);
++	return;
++}
++
++
++int cover_buf_flush(struct tcb *tcp) {
++	unsigned long cover_addr;
++	unsigned long ip;
++	int i, j;
++	long n;
++	pid_t pid;
++	void *tree = 0;
++	struct kcov_tsearch_entry *e = 0;
++
++    pid = tcp->pid;
++	i = j = tcp->kcov_meta.buf_pos;
++	cover_addr = tcp->kcov_meta.mmap_area;
++
++	if (tcp->kcov_meta.is_main_tracee) {
++		n = __atomic_load_n((unsigned long *)cover_addr, __ATOMIC_RELAXED);
++	} else if ((n = ptrace(PTRACE_PEEKDATA, pid, cover_addr, NULL)) < 0) {
++		perror("PTRACE_PEEKDATA");
++		return -1;
++	}
++
++	tprintf("\"Cover: ");
++
++	while(i < n) {
++		void *t = 0;
++		if (!tcp->kcov_meta.is_main_tracee) {
++			ip = ptrace(PTRACE_PEEKDATA, pid, cover_addr + (i+1)*sizeof(unsigned long), NULL);
++		}
++		else {
++			ip = ((unsigned long *)cover_addr)[i+1];
++		}
++		e = make_entry(ip);
++		if (!(t = tsearch(e, &tree, kcov_compare_func)))
++			exit(EXIT_FAILURE);
++        struct kcov_tsearch_entry *ret = *(struct kcov_tsearch_entry **)t;
++		if (ret == e) {
++			//We have a new entry;
++			if (i > j)
++				tprintf(",");
++			tprintf("0x%lx", ip);
++		} else {
++            free(e);
++        }
++		i++;
++	}
++	tprintf("\"\n");
++	if (tcp->kcov_meta.is_main_tracee) {
++		__atomic_store_n((unsigned long *)cover_addr, 0, __ATOMIC_RELAXED);
++		tcp->kcov_meta.buf_pos = 0;
++	} else {
++		tcp->kcov_meta.buf_pos = n;
++	}
++	tdestroy(tree, kcov_free_func);
++    return 0;
++}
++
++static void
++prepare_kcov(struct tcb *tcp)
++{
++	if (tcp->kcov_meta.after_exec) {
++		tcp->kcov_meta.mmap_area = setup_kcov(tcp->pid, 0, 0, &tcp->kcov_meta.fd);
++		tcp->kcov_meta.after_exec = 0;
++	} else {
++		//We need to free our parent's cover buffer
++		tcp->kcov_meta.fd = 0;
++		tcp->kcov_meta.mmap_area = setup_kcov(tcp->pid,
++											  tcp->kcov_meta.parent,
++											  tcp->kcov_meta.parent_addr,
++											  &tcp->kcov_meta.fd);
++	}
++}
++
++static void
++handle_kcov(struct tcb *tcp)
++{
++    if (!tcp->kcov_meta.need_setup) {
++        if (cover_buf_flush(tcp) < 0) {
++            fprintf(stderr, "ERROR FLUSHING BUFFER\n");
++        }
++    } else {
++		prepare_kcov(tcp);
++		tcp->kcov_meta.need_setup = 0;
++	}
++}
++
++
+ static int
+ trace_syscall_exiting(struct tcb *tcp)
+ {
+@@ -976,6 +1128,8 @@ trace_syscall_exiting(struct tcb *tcp)
+ 	tprints("\n");
+ 	dumpio(tcp);
+ 	line_ended();
++	//Dump kcov info
++
+ 
+ #ifdef USE_LIBUNWIND
+ 	if (stack_trace_enabled)
+@@ -983,6 +1137,20 @@ trace_syscall_exiting(struct tcb *tcp)
+ #endif
+ 
+  ret:
++    if (kcov_enabled) {
++        if (tcp->s_ent->sen == SEN_execve &&
++            !tcp->kcov_meta.is_main_tracee) {
++            //On exxc the cover buffers of the child disappear so we have
++            //to setupkcov again
++            tcp->kcov_meta.need_setup = 1;
++            tcp->kcov_meta.after_exec = 1;
++            tcp->kcov_meta.update_proc_meta = 1;
++            tcp->kcov_meta.mmap_area = 0;
++        } else {
++            handle_kcov(tcp);
++        }
++
++    }
+ 	tcp->flags &= ~(TCB_INSYSCALL | TCB_TAMPERED);
+ 	tcp->sys_func_rval = 0;
+ 	free_tcb_priv_data(tcp);
+@@ -1202,6 +1370,8 @@ struct sysent_buf {
+ 	char buf[sizeof("syscall_%lu") + sizeof(kernel_ulong_t) * 3];
+ };
+ 
++
++
+ static void
+ free_sysent_buf(void *ptr)
+ {
+diff --git a/util.c b/util.c
+index 9144efb..293b503 100644
+--- a/util.c
++++ b/util.c
+@@ -45,6 +45,8 @@
+ #include "regs.h"
+ #include "ptrace.h"
+ 
++#define PTR_ADDRESS_BUFSIZE 21
++
+ int
+ string_to_uint_ex(const char *const str, char **const endptr,
+ 		  const unsigned int max_val, const char *const accepted_ending)
+@@ -889,6 +891,7 @@ printstr_ex(struct tcb *const tcp, const kernel_ulong_t addr,
+ 	static char *outstr;
+ 	unsigned int size;
+ 	unsigned int style = user_style;
++  int outstr_offset;
+ 	int rc;
+ 	int ellipsis;
+ 
+@@ -898,14 +901,17 @@ printstr_ex(struct tcb *const tcp, const kernel_ulong_t addr,
+ 	}
+ 	/* Allocate static buffers if they are not allocated yet. */
+ 	if (!str) {
+-		unsigned int outstr_size = 4 * max_strlen + /*for quotes and NUL:*/ 3;
++		unsigned int outstr_size = 4 * max_strlen + /*for quotes and NUL:*/ 3 + /*for printing ptr address*/ PTR_ADDRESS_BUFSIZE;
+ 
+-		if (outstr_size / 4 != max_strlen)
++		if ((outstr_size-PTR_ADDRESS_BUFSIZE) / 4 != max_strlen)
+ 			die_out_of_memory();
+ 		str = xmalloc(max_strlen + 1);
+ 		outstr = xmalloc(outstr_size);
+ 	}
+ 
++  outstr_offset = 0;
++  outstr_offset = snprintf(outstr, PTR_ADDRESS_BUFSIZE, "&%p=", addr);
++
+ 	/* Fetch one byte more because string_quote may look one byte ahead. */
+ 	size = max_strlen + 1;
+ 
+@@ -929,7 +935,7 @@ printstr_ex(struct tcb *const tcp, const kernel_ulong_t addr,
+ 	/* If string_quote didn't see NUL and (it was supposed to be ASCIZ str
+ 	 * or we were requested to print more than -s NUM chars)...
+ 	 */
+-	ellipsis = string_quote(str, outstr, size, style)
++	ellipsis = string_quote(str, outstr+outstr_offset, size, style)
+ 		   && len
+ 		   && ((style & QUOTE_0_TERMINATED)
+ 		       || len > max_strlen);
