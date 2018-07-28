@@ -72,7 +72,6 @@ func ParseTraces(target *prog.Target) []*Context {
 	}
 	seeds := make(distiller.Seeds, 0)
 	for _, file := range(names) {
-		fmt.Printf("Scanning file: %s\n", file)
 		tree := Parse(file)
 		if tree == nil {
 			fmt.Fprintf(os.Stderr, "File: %s is empty\n", file)
@@ -105,9 +104,9 @@ func ParseTraces(target *prog.Target) []*Context {
 			}
 		}
 
-		fmt.Fprintf(os.Stderr, "Total number of seeds: %d\n", seeds.Len())
 	}
 	if distill {
+		fmt.Fprintf(os.Stderr, "Total number of seeds: %d\n", seeds.Len())
 		distler := distiller.NewDistiller(config.NewDistillConfig(*flagDistill))
 		distler.Add(seeds)
 		distilledProgs := distler.Distill(GetProgs(ret))

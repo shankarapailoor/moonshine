@@ -11,6 +11,7 @@ import (
 	"math/rand"
 	"strings"
 	//"bytes"
+
 	"bytes"
 )
 
@@ -174,15 +175,6 @@ func parseCall(ctx *Context) (*prog.Call, error) {
 	if call := ParseMemoryCall(ctx); call != nil {
 		return call, nil
 	}
-	if len(retCall.Meta.Args) != len(straceCall.Args) {
-		fmt.Printf("syzkaller system call: " +
-			"%s has %d arguments strace call: " +
-			"%s has %d arguments",
-			retCall.Meta.CallName,
-			len(retCall.Meta.Args),
-			straceCall.CallName,
-			len(straceCall.Args))
-	}
 	for i := range(retCall.Meta.Args) {
 		var strArg strace_types.Type = nil
 		if i < len(straceCall.Args) {
@@ -203,7 +195,7 @@ func parseCall(ctx *Context) (*prog.Call, error) {
 func parseResult(syzType prog.Type, straceRet int64, ctx *Context) {
 	if straceRet > 0 {
 		//TODO: This is a hack NEED to refacto lexer to parser return values into strace types
-		straceExpr := strace_types.NewExpression(strace_types.NewIntType(straceRet))
+		straceExpr := strace_types.NewExpression(strace_types.NewIntsType([]int64{straceRet}))
 		switch syzType.(type) {
 		case *prog.ResourceType:
 			ctx.Cache.Cache(syzType, straceExpr, ctx.CurrentSyzCall.Ret)
@@ -264,7 +256,6 @@ func Parse_ArrayType(syzType *prog.ArrayType, straceType strace_types.Type, ctx 
 		}
 		for i := 0; i < a.Len; i++ {
 			if arg, err := parseArgs(syzType.Type, a.Elems[i], ctx); err == nil {
-				fmt.Printf("arg size: arg size: %d syzType name: %s syzType size: %d\n", arg.Size(), syzType.Type.Name(), syzType.Type.Size())
 				args = append(args, arg)
 			} else {
 				Failf("Error parsing array elem: %s\n", err.Error())
@@ -303,6 +294,10 @@ func Parse_StructType(syzType *prog.StructType, straceType strace_types.Type, ct
 	case *strace_types.Call:
 		args = append(args, ParseInnerCall(syzType, a, ctx))
 	case *strace_types.Expression:
+		/*
+		 May get here through select. E.g. select(2, [6, 7], ..) since Expression can
+		 be Ints. However, creating fd set is hard and we let default arg through
+		 */
 		return GenDefaultArg(syzType, ctx), nil
 	case *strace_types.BufferType:
 		return serialize(syzType, []byte(a.Val), ctx)
@@ -378,7 +373,7 @@ func IdentifySockaddrStorageUnion(ctx *Context) int {
 	call := ctx.CurrentStraceCall
 	var straceArg strace_types.Type
 	switch call.CallName {
-	case "bind", "connect", "recvmsg", "sendmsg":
+	case "bind", "connect", "recvmsg", "sendmsg", "getsockname", "accept4", "accept":
 		straceArg = call.Args[1]
 	default:
 		Failf("Trying to identify union for sockaddr_storage for call: %s\n", call.CallName)
@@ -387,6 +382,7 @@ func IdentifySockaddrStorageUnion(ctx *Context) int {
 	case *strace_types.StructType:
 		for i := range strType.Fields {
 			fieldStr := strType.Fields[i].String()
+			fmt.Printf("Field Str: %s\n", fieldStr)
 			if strings.Contains(fieldStr, "AF_INET") {
 				return 1
 			} else if strings.Contains(fieldStr, "AF_INET6") {
@@ -394,7 +390,6 @@ func IdentifySockaddrStorageUnion(ctx *Context) int {
 			} else if strings.Contains(fieldStr, "AF_UNIX") {
 				return 0
 			} else if strings.Contains(fieldStr, "AF_NETLINK") {
-				fmt.Printf("AF NETLINK: ")
 				return 5
 			}
 		}
@@ -472,12 +467,10 @@ func Parse_BufferType(syzType *prog.BufferType, straceType strace_types.Type, ct
 		default:
 			switch syzType.Kind {
 			case prog.BufferBlobRand:
-				fmt.Printf("Buffer Type Rand\n")
 				size := rand.Intn(256)
 				return prog.MakeOutDataArg(syzType, uint64(size)), nil
 
 			case prog.BufferBlobRange:
-				fmt.Printf("Buffer Type Range: for call %s\n", ctx.CurrentStraceCall.CallName)
 				max := rand.Intn(int(syzType.RangeEnd) - int(syzType.RangeBegin) + 1)
 				size := max + int(syzType.RangeBegin)
 				return prog.MakeOutDataArg(syzType, uint64(size)), nil
@@ -493,6 +486,7 @@ func Parse_BufferType(syzType *prog.BufferType, straceType strace_types.Type, ct
 		case prog.BufferFilename:
 			a.Val = SanitizeFilename(a.Val)
 		}
+
 		bufVal = []byte(a.Val)
 	case *strace_types.Expression:
 		val := a.Eval(ctx.Target)
@@ -551,9 +545,6 @@ func Parse_PtrType(syzType *prog.PtrType, straceType strace_types.Type, ctx *Con
 		if res, err := parseArgs(syzType.Type, a, ctx); err != nil {
 			panic(fmt.Sprintf("Error parsing Ptr: %s", err.Error()))
 		} else {
-			if !syzType.Type.Varlen() {
-				fmt.Printf("Call: %s, ptr name: %s res size%d\n", ctx.CurrentSyzCall.Meta.CallName, syzType.Name(), syzType.Type.Size())
-			}
 			return addr(ctx, syzType, res.Size(), res)
 		}
 	}
@@ -565,6 +556,13 @@ func Parse_ConstType(syzType prog.Type, straceType strace_types.Type, ctx *Conte
 	}
 	switch a := straceType.(type) {
 	case *strace_types.Expression:
+		if a.IntsType != nil && len(a.IntsType) >= 2 {
+			/*
+		 	May get here through select. E.g. select(2, [6, 7], ..) since Expression can
+			 be Ints. However, creating fd set is hard and we let default arg through
+		 	*/
+			return GenDefaultArg(syzType, ctx), nil
+		}
 		return strace_types.ConstArg(syzType, a.Eval(ctx.Target)), nil
 	case *strace_types.DynamicType:
 		return strace_types.ConstArg(syzType, a.BeforeCall.Eval(ctx.Target)), nil
@@ -794,6 +792,7 @@ func GenDefaultStraceType(syzType prog.Type) strace_types.Type {
 	}
 	return nil
 }
+
 
 func SanitizeFilename(filename string) string {
 	var buf bytes.Buffer

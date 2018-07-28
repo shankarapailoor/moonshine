@@ -212,7 +212,6 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 	if offset % PageSize > 0 {
 		offset = (offset/PageSize+1)*PageSize
 	}
-	fmt.Printf("Call Len: %d Offset: %d\n", len(prog.Calls), offset)
 
 	for _, mapping := range m.mappings {
 		for _, dep := range mapping.usedBy {
@@ -245,11 +244,9 @@ func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64{
 			sum += a.num_bytes
 		}
 	}
-	fmt.Printf("SUM: %d\n", sum)
 	if sum % PageSize > 0 {
 		sum = (sum/PageSize+1)*PageSize
 	}
-	fmt.Printf("Total Memory Allocations: %d\n", sum)
 	return sum
 }
 
@@ -266,7 +263,6 @@ func (m *MemoryTracker) GetTotalVMAAllocations(prog *Prog) uint64 {
 			sum += (mapping.end - mapping.start)
 		}
 	}
-	fmt.Printf("Total Memory: %d\n", sum)
 	return sum
 }
 

@@ -3,6 +3,7 @@ package scanner
 
 import (
     types "github.com/shankarapailoor/moonshine/strace_types"
+    //"fmt"
 )
 %}
 
@@ -44,7 +45,7 @@ import (
 %type <val_call> call_type
 %type <val_parenthetical> parenthetical, parentheticals
 %type <val_macro> macro_type
-%type <val_type> type, expr_type, flags
+%type <val_type> type, expr_type, flags, ints
 %type <val_pointer_type> pointer_type
 %type <val_ip_type> ip_type
 %type <val_types> types
@@ -74,63 +75,64 @@ import (
 
 %%
 syscall:
-    INT IDENTIFIER LPAREN UNFINISHED %prec NOFLAG { $$ = types.NewSyscall($1, $2, nil, int64(-1), true, false);
+    IDENTIFIER LPAREN UNFINISHED %prec NOFLAG { $$ = types.NewSyscall(-1, $1, nil, int64(-1), true, false);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT IDENTIFIER LPAREN types UNFINISHED %prec NOFLAG { $$ = types.NewSyscall($1, $2, $4, int64(-1), true, false);
+    | IDENTIFIER LPAREN types UNFINISHED %prec NOFLAG { $$ = types.NewSyscall(-1, $1, $3, int64(-1), true, false);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED UNFINISHED RPAREN EQUALS QUESTION %prec NOFLAG
+    | RESUMED UNFINISHED RPAREN EQUALS QUESTION %prec NOFLAG
         {
-            $$ = types.NewSyscall($1, "tmp", nil, -1, true, true);
+            $$ = types.NewSyscall(-1, "tmp", nil, -1, true, true);
             Stracelex.(*lexer).result = $$;
         }
-    | INT IDENTIFIER LPAREN RESUMED RPAREN EQUALS INT %prec NOFLAG
+    | IDENTIFIER LPAREN RESUMED RPAREN EQUALS INT %prec NOFLAG
         {
-            $$ = types.NewSyscall($1, $2, nil, int64($7), false, false);
+            $$ = types.NewSyscall(-1, $1, nil, int64($6), false, false);
             Stracelex.(*lexer).result = $$;
         }
-    | INT RESUMED RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", nil, int64($5), false, true);
+    | RESUMED RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", nil, int64($4), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED RPAREN EQUALS UINT %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", nil, int64($5), false, true);
+    | RESUMED RPAREN EQUALS UINT %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", nil, int64($4), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED RPAREN EQUALS QUESTION %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", nil, -1, false, true);
+    | RESUMED RPAREN EQUALS QUESTION %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", nil, -1, false, true);
                                                               Stracelex.(*lexer).result = $$ }
-    | INT RESUMED RPAREN EQUALS INT LPAREN parenthetical RPAREN { $$ = types.NewSyscall($1, "tmp", nil, int64($5), false, true);
+    | RESUMED RPAREN EQUALS INT LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", nil, int64($4), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED RPAREN EQUALS UINT LPAREN parenthetical RPAREN { $$ = types.NewSyscall($1, "tmp", nil, int64($5), false, true);
+    | RESUMED RPAREN EQUALS UINT LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", nil, int64($4), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED types RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", $3, int64($6), false, true);
+    | RESUMED types RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED types RPAREN EQUALS UINT %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", $3, int64($6), false, true);
+    | RESUMED types RPAREN EQUALS UINT %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED types RPAREN EQUALS QUESTION %prec NOFLAG { $$ = types.NewSyscall($1, "tmp", $3, -1, false, true);
+    | RESUMED types RPAREN EQUALS QUESTION %prec NOFLAG { $$ = types.NewSyscall(-1, "tmp", $2, -1, false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED types RPAREN EQUALS INT LPAREN parenthetical RPAREN { $$ = types.NewSyscall($1, "tmp", $3, int64($6), false, true);
+    | RESUMED types RPAREN EQUALS INT LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT RESUMED types RPAREN EQUALS UINT LPAREN parenthetical RPAREN { $$ = types.NewSyscall($1, "tmp", $3, int64($6), false, true);
+    | RESUMED types RPAREN EQUALS UINT LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
                                                         Stracelex.(*lexer).result = $$ }
-    | INT IDENTIFIER LPAREN RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall($1, $2, nil, $6, false, false);
+    | IDENTIFIER LPAREN RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall(-1, $1, nil, $5, false, false);
                                                             Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS INT %prec NOFLAG{
-                                                        $$ = types.NewSyscall($1, $2, $4, $7, false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS INT %prec NOFLAG{
+                                                        $$ = types.NewSyscall(-1, $1, $3, $6, false, false);
                                                         Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS UINT %prec NOFLAG {
-                                                        $$ = types.NewSyscall($1, $2, $4, int64($7), false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS UINT %prec NOFLAG {
+                                                        $$ = types.NewSyscall(-1, $1, $3, int64($6), false, false);
                                                         Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS QUESTION %prec NOFLAG {
-                                                            $$ = types.NewSyscall($1, $2, $4, -1, false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS QUESTION %prec NOFLAG {
+                                                            $$ = types.NewSyscall(-1, $1, $3, -1, false, false);
                                                             Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS INT FLAG LPAREN parentheticals RPAREN {
-                                                              $$ = types.NewSyscall($1, $2, $4, $7, false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS INT FLAG LPAREN parentheticals RPAREN {
+                                                              $$ = types.NewSyscall(-1, $1, $3, $6, false, false);
                                                               Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS UINT FLAG LPAREN parentheticals RPAREN {
-                                                              $$ = types.NewSyscall($1, $2, $4, int64($7), false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS UINT FLAG LPAREN parentheticals RPAREN {
+                                                              $$ = types.NewSyscall(-1, $1, $3, int64($6), false, false);
                                                               Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS INT LPAREN parentheticals RPAREN {
-                                                                  $$ = types.NewSyscall($1, $2, $4, $7, false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS INT LPAREN parentheticals RPAREN {
+                                                                  $$ = types.NewSyscall(-1, $1, $3, $6, false, false);
                                                                   Stracelex.(*lexer).result = $$;}
-    | INT IDENTIFIER LPAREN types RPAREN EQUALS UINT LPAREN parentheticals RPAREN {
-                                                                  $$ = types.NewSyscall($1, $2, $4, int64($7), false, false);
+    | IDENTIFIER LPAREN types RPAREN EQUALS UINT LPAREN parentheticals RPAREN {
+                                                                  $$ = types.NewSyscall(-1, $1, $3, int64($6), false, false);
                                                                   Stracelex.(*lexer).result = $$;}
+    | INT syscall {call := $2; call.Pid = $1; Stracelex.(*lexer).result = call}
 
 parentheticals:
     parenthetical {$$ = types.NewParenthetical();}
@@ -169,7 +171,7 @@ type:
 
 expr_type:
     flags {$$ = types.NewExpression($1)}
-    | int_type {$$ = types.NewExpression($1)}
+    | ints {$$ = types.NewExpression($1)}
     | macro_type {$$ = types.NewExpression($1)}
     | expr_type OR expr_type {$$ = types.NewExpression(types.NewBinop($1, types.OR, $3))}
     | expr_type AND expr_type {$$ = types.NewExpression(types.NewBinop($1, types.AND, $3))}
@@ -181,6 +183,10 @@ expr_type:
     | LPAREN expr_type RPAREN {$$ = $2}
     | expr_type TIMES expr_type {$$ = types.NewExpression(types.NewBinop($1, types.TIMES, $3))}
     | ONESCOMP expr_type {$$ = types.NewExpression(types.NewUnop($2, types.ONESCOMP))}
+
+ints:
+    int_type {i := make(types.Ints, 1); i[0] = $1; $$ = i}
+    | ints int_type {$$ = append($1.(types.Ints), $2)}
 
 flags:
     flag_type {f := make(types.Flags, 1); f[0] = $1; $$ = f}

@@ -37,11 +37,15 @@ func (lex *lexer) Lex(out *StraceSymType) int {
     eof := lex.pe
     tok := 0
     %%{
-        date = digit{4}.'-'.digit{2}.'-'.digit{2};
+        dateSep = '-' | '\/';
+        datetimeSep = 'T' | '-';
+        date = digit{4}.dateSep.digit{2}.dateSep.digit{2};
         nullptr = "NULL";
-        time = digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4}.'.'.digit+ |
-            digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4};
-        datetime = date.'T'.time;
+        time = digit{2}.':'.digit{2}.':'.digit{2} |
+            digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4} |
+            digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4}.'.'.digit+ |
+            digit{2}.':'.digit{2}.':'.digit{2}.'.'.digit+;
+        datetime = date.datetimeSep.time;
         unfinished = '<unfinished ...>' | ',  <unfinished ...>';
         or = 'or';
         keyword = 'sizeof' | 'struct';
@@ -51,6 +55,8 @@ func (lex *lexer) Lex(out *StraceSymType) int {
                     | '<... resuming'.' '.identifier.' '.identifier.' '.'...>';
         ipv4 = '\"'.digit{1,4}.'\.'.digit{1,4}.'\.'digit{1,4}.'\.'.digit{1,4}'\"';
         ipv6 = '\"'.':'.':'.'\"' | '\"'.':'.':'.digit.'\"';
+        flag = (['_']+?upper+ . ['_'A-Z0-9]+)-nullptr;
+        string = '\"'.['_'('')'' ''#'':'0-9a-zA-Z\/\\\*]*.'\"'- (ipv4 | ipv6);
         mac = xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2};
         comment := |*
             ((any-"*\/"));
@@ -64,9 +70,10 @@ func (lex *lexer) Lex(out *StraceSymType) int {
             '0x'xdigit+ => {out.val_uint, _ = strconv.ParseUint(string(lex.data[lex.ts:lex.te]), 0, 64); tok = UINT;fbreak;};
             ipv4 => {out.data = string(lex.data[lex.ts+1:lex.te-1]); tok=IPV4; fbreak;};
             ipv6 => {out.data = string(lex.data[lex.ts+1:lex.te-1]); tok=IPV6; fbreak;};
-            '\"'.[0-9a-zA-Z\/\\\*]*.'\"'.['.']* => {out.data = ParseString(string(lex.data[lex.ts+1:lex.te-1])); tok = STRING_LITERAL;fbreak;};
+            string.['.']* => {out.data = ParseString(string(lex.data[lex.ts+1:lex.te-1])); tok = STRING_LITERAL;fbreak;};
             nullptr => {tok = NULL; fbreak;};
-            (['_']+?upper+ . ['_'A-Z0-9]+)-nullptr => {out.data = string(lex.data[lex.ts:lex.te]); tok = FLAG; fbreak;};
+            flag => {out.data = string(lex.data[lex.ts:lex.te]); tok = FLAG; fbreak;};
+            '\"'.flag.'\"' => {out.data = string(lex.data[lex.ts+1:lex.te-1]); tok=FLAG; fbreak;};
             identifier => {out.data = string(lex.data[lex.ts:lex.te]); tok = IDENTIFIER;fbreak;};
             unfinished => {tok = UNFINISHED; fbreak;};
             resumed => {tok = RESUMED; fbreak;};
@@ -122,7 +129,7 @@ func ParseString(s string) string{
 	    strippedStr += "0"
 	}
 	if decoded, err = hex.DecodeString(strippedStr); err != nil {
-		panic(fmt.Sprintf("Failed to decode string: %s, with error: %s\n", s, err.Error()))
+		fmt.Printf("Failed to decode string: %s, with error: %s\n", s, err.Error())
 	}
 	decoded = append(decoded, '\x00')
 	return string(decoded)

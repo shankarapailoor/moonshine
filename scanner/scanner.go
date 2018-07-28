@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"github.com/shankarapailoor/moonshine/strace_types"
 	"os"
+	. "github.com/shankarapailoor/moonshine/logging"
 )
 
 const(
@@ -64,10 +65,7 @@ func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
 			StraceParse(lex)
 			call := lex.result
 			if call == nil {
-				panic("CALL IS NIL")
-			}
-			if call.Pid == -1 {
-				continue
+				Failf("Failed to parse line: %s\n", line)
 			}
 			lastCall = tree.Add(call)
 			//trace.Calls = append(trace.Calls, call)
@@ -86,7 +84,7 @@ func Parse(filename string) *strace_types.TraceTree {
 
 	fmt.Fprintf(os.Stderr, "Scanning file: %s\n", filename)
 	if data, err = ioutil.ReadFile(filename); err != nil {
-		panic(fmt.Sprintf("error reading file: %s\n", err.Error()))
+		Failf("error reading file: %s\n", err.Error())
 	}
 	buf := make([]byte, maxBufferSize)
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))

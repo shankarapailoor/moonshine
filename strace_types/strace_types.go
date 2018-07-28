@@ -185,6 +185,7 @@ type Expression struct {
 	IntType *IntType
 	MacroType *Macro
 	SetType *Set
+	IntsType Ints
 }
 
 func NewExpression(typ Type) (exp *Expression) {
@@ -200,6 +201,8 @@ func NewExpression(typ Type) (exp *Expression) {
 		exp.FlagType = a
 	case Flags:
 		exp.FlagsType = a
+	case Ints:
+		exp.IntsType = a
 	case *Macro:
 		exp.MacroType = a
 	case *Set:
@@ -243,6 +246,8 @@ func (e *Expression) Eval(target *prog.Target) uint64 {
 		return e.IntType.Eval(target)
 	} else if e.MacroType != nil {
 		return e.MacroType.Eval(target)
+	} else if e.IntsType != nil {
+		return e.IntsType.Eval(target)
 	}
 	panic("Failed to eval expression")
 }
@@ -421,6 +426,14 @@ type IntType struct {
 	Val int64
 }
 
+func NewIntsType(vals []int64) Ints {
+	ints := make([]*IntType, 0)
+	for _, v := range(vals) {
+		ints = append(ints, NewIntType(v))
+	}
+	return ints
+}
+
 func NewIntType(val int64) (typ *IntType) {
 	typ = new(IntType)
 	typ.Val = val
@@ -442,6 +455,8 @@ func (i *IntType) String() string {
 
 type Flags []*FlagType
 
+type Ints []*IntType
+
 func (f Flags) Eval(target *prog.Target) uint64 {
 	if len(f) > 1 {
 		panic("Unable to Evaluate Set")
@@ -461,6 +476,29 @@ func (f Flags) String() string {
 		panic("Cannot get string for set")
 	} else if len(f) == 1 {
 		return f[0].String()
+	} else {
+		return ""
+	}
+}
+func (i Ints) Eval(target *prog.Target) uint64 {
+	if len(i) > 1 {
+		panic("Unable to Evaluate Set")
+	} else if len(i) == 1 {
+		return i[0].Eval(target)
+	} else {
+		return 0
+	}
+}
+
+func (i Ints) Name() string {
+	return "Flags Type"
+}
+
+func (i Ints) String() string {
+	if len(i) > 1 {
+		panic("Cannot get string for set")
+	} else if len(i) == 1 {
+		return i[0].String()
 	} else {
 		return ""
 	}
