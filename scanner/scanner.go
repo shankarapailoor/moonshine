@@ -7,7 +7,6 @@ import (
 	"strings"
 	"strconv"
 	"github.com/shankarapailoor/moonshine/strace_types"
-	"os"
 	. "github.com/shankarapailoor/moonshine/logging"
 )
 
@@ -82,7 +81,6 @@ func Parse(filename string) *strace_types.TraceTree {
 	var data []byte
 	var err error
 
-	fmt.Fprintf(os.Stderr, "Scanning file: %s\n", filename)
 	if data, err = ioutil.ReadFile(filename); err != nil {
 		Failf("error reading file: %s\n", err.Error())
 	}

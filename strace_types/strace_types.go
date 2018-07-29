@@ -229,6 +229,8 @@ func (r *Expression) String() string {
 		return r.FlagsType.String()
 	} else if r.IntType != nil {
 		return r.IntType.String()
+	} else if r.IntsType != nil {
+		return r.IntsType.String()
 	}
 	return ""
 }

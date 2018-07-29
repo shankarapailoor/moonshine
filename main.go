@@ -43,7 +43,7 @@ func main() {
 		Failf("error getting target: %v", err.Error())
 	} else {
 		ParseTraces(target)
-		pack("serialized", "corpus.db")
+		pack("deserialized", "corpus.db")
 	}
 }
 
@@ -71,7 +71,10 @@ func ParseTraces(target *prog.Target) []*Context {
 		distill = true
 	}
 	seeds := make(distiller.Seeds, 0)
-	for _, file := range(names) {
+	totalFiles := len(names)
+	fmt.Printf("Total Number of Files: %d\n", totalFiles)
+	for i, file := range(names) {
+		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, names[i])
 		tree := Parse(file)
 		if tree == nil {
 			fmt.Fprintf(os.Stderr, "File: %s is empty\n", file)
@@ -118,7 +121,7 @@ func ParseTraces(target *prog.Target) []*Context {
 			if err := prog_.Validate(); err != nil {
 				panic(fmt.Sprintf("Error validating program: %s\n", err.Error()))
 			}
-			s_name := "serialized/" + "distill" + strconv.Itoa(i)
+			s_name := "deserialized/" + "distill" + strconv.Itoa(i)
 			if err := ioutil.WriteFile(s_name, prog_.Serialize(), 0640); err != nil {
 				Failf("failed to output file: %v", err)
 			}
@@ -143,7 +146,6 @@ func getFileNames(dir string) []string {
 }
 
 func ParseTree(tree *strace_types.TraceTree, pid int64, target *prog.Target) []*Context {
-	fmt.Fprintf(os.Stderr, "Parsing tree for file: %s\n", tree.Filename)
 	ctxs := make([]*Context, 0)
 	ctx, err := ParseProg(tree.TraceMap[pid], target)
 	parsedProg := ctx.Prog

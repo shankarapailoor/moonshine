@@ -41,7 +41,6 @@ func (d *ImplicitDistiller) getHeavyHitters(seeds Seeds) Seeds {
 		ips := d.Contributes(seed, seenIps)  /* how many unique Ips does seed contribute */
 		if ips > 0 {
 			heavyHitters.Add(seed)
-			fmt.Printf("Seed: %s contributes: %d ips out of its total of: %d\n", seed.Call.Meta.Name, ips, len(seed.Cover))
 			contributing_seeds += 1
 		}
 	}
@@ -91,7 +90,6 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 			continue
 		}
 		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
-		fmt.Printf("Total Memory Allocations: %d\n", totalMemoryAllocations)
 		calls := make([]*prog.Call, 0)
 		state := d.CallToSeed[prog_.Calls[0]].State
 		if totalMemoryAllocations > 0 {
@@ -105,21 +103,21 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 		prog_.Target = target
 		distilled = append(distilled, prog_)
 	}
-	avgLen := 0
+	totalLen := 0
 	progs_ := 0
 	for _, prog_ := range distilled {
 		if len(prog_.Calls) < 2 {
 			continue
 		}
 		progs_ += 1
-		avgLen += len(prog_.Calls)
+		totalLen += len(prog_.Calls)
 	}
-	avgLen /= progs_
+	avgLen := totalLen/progs_
 	fmt.Fprintf(os.Stderr, "Average Program Length: %d\n", avgLen)
 	fmt.Fprintf(os.Stderr,
-		"Total Contributing seeds: %d out of %d, in %d implicitly-distilled programs\n",
-		len(heavyHitters), len(seeds), len(distilled),
-	)
+		"Total Contributing seeds: %d out of %d, in %d implicitly-distilled programs total: %d\n",
+		len(heavyHitters), len(seeds), len(distilled), totalLen)
+	d.Stats(heavyHitters)
 	return
 }
 

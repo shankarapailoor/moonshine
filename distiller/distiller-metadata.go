@@ -151,7 +151,8 @@ func (d *DistillerMetadata) Stats(distilledSeeds Seeds) {
 		if err != nil {
 			fmt.Printf("Error opening stat file: %v\n", err.Error)
 		}
-		data := fmt.Sprintf("Total Calls: %d, Distilled: %d", totalCalls, distilledCalls)
+		data := fmt.Sprintf("Total Calls: %d, Distilled: %d\n", totalCalls, distilledCalls)
+		f.WriteString(data)
 		for _, seed := range distilledSeeds {
 			data = fmt.Sprintf("Call: %s Contributes: %d\n", seed.Call.Meta.CallName, len(seed.Cover))
 			f.WriteString(data)
