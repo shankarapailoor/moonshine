@@ -53,7 +53,7 @@ $ make
 
 
 ```bash
-go get -u github.com/shankarapailoor/moonshine
+go get -u github.com/shankarapailoor/moonshine/...
 cd $GOPATH/src/github.com/shankarapailoor/moonshine
 make
 ```

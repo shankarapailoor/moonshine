@@ -130,6 +130,7 @@ func ParseString(s string) string{
 	}
 	if decoded, err = hex.DecodeString(strippedStr); err != nil {
 		fmt.Printf("Failed to decode string: %s, with error: %s\n", s, err.Error())
+		decoded = []byte(strippedStr)
 	}
 	decoded = append(decoded, '\x00')
 	return string(decoded)

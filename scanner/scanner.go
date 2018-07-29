@@ -14,7 +14,7 @@ const(
 	maxBufferSize = 64*1024*1024
 	CoverDelim = ","
 	CoverID = "Cover:"
-	SYSRESTART = "ERESTARTSYS"
+	SYSRESTART = "ERESTART"
 	SignalPlus = "+++"
 	SignalMinus = "---"
 )
@@ -61,7 +61,9 @@ func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
 
 		} else {
 			lex := newLexer(scanner.Bytes())
-			StraceParse(lex)
+			if ret := StraceParse(lex); ret != 0 {
+				fmt.Printf("Error parsing line: %s\n", line)
+			}
 			call := lex.result
 			if call == nil {
 				Failf("Failed to parse line: %s\n", line)
