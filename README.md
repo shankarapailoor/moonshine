@@ -2,6 +2,12 @@
 
 MoonShine selects compact and diverse seeds for OS fuzzers from system call traces of real world programs. Please see our USENIX'18 paper [MoonShine: Optimizing OS Fuzzer Seed Selection with Trace Distillation](http://www.cs.columbia.edu/~suman/docs/moonshine.pdf) for more details. Currently, MoonShine can only generate seeds for Syzkaller on Linux. 
 
+# Contents
+* [Getting Started](#getting-started)
+    * [Requirements](#requirements)
+    * [Build and Run MoonShine](#build-and-run-moonshine)
+    * [Collecting Traces](#collecting-traces)
+
 # Contact
 [Shankara Pailoor](shankarapailoor@gmail.com)
 
@@ -66,7 +72,7 @@ cp corpus.db ~/$SYZKALLER_WORKDIR
 
 MoonShine also writes the deserialized syzkaller programs from the traces under ```deserialized``` so that you can manually inspect the conversion. Programs in the deserialized directory have the naming convention ```[trace_name]+[id]```. If the original trace consists of 1 task, ```id``` should always be 1, but if there are multiple tasks then each task is assigned a unique id and converted to a separate program. 
 
-## Gathering Traces
+## Collecting Traces
 
 ### Strace
 Currently, MoonShine can only parse traces gathered with strace. We also suggest that you use strace versions >= 4.16 as those are the only versions we have tried so far. Strace releases can be found [here](https://github.com/strace/strace/releases) and build instructions can be found [here](https://github.com/strace/strace/blob/master/INSTALL).
