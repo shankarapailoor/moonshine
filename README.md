@@ -68,7 +68,7 @@ The arguments are explained as follows
 #### Example
 
 ```bash
-./bin/moonshine -dir getting-started/sampletraces/ -distill implciit
+./bin/moonshine -dir getting-started/sampletraces/ -distill getting-started/distill.json
 ```
 
 MoonShine can also take a single trace with the ```-file``` flag instead of ```-dir```. A successful distillation will produce a corpus.db file to be used as seeds for Syzkaller. The 
