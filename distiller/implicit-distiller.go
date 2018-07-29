@@ -62,7 +62,7 @@ func (d *ImplicitDistiller) getRandomSeeds(seeds Seeds) Seeds {
 
 func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	seeds := d.Seeds
-	fmt.Printf("Performing implicit distillation with %d seeds\n", len(seeds))
+	fmt.Printf("Performing implicit distillation with %d calls contributing coverage\n", len(seeds))
 	sort.Sort(sort.Reverse(seeds))  // sort seeds by inidividual coverage.
 	heavyHitters := make(Seeds, 0)
 	var target *prog.Target = nil
@@ -86,7 +86,7 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	fmt.Printf("Total Distilled Progs: %d\n", len(distilledProgs))
 	for prog_, _ := range distilledProgs {
 		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
-			fmt.Printf("Error: %s\n", err.Error())
+			//fmt.Printf("Error: %s\n", err.Error())
 			continue
 		}
 		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
@@ -115,7 +115,7 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	avgLen := totalLen/progs_
 	fmt.Fprintf(os.Stderr, "Average Program Length: %d\n", avgLen)
 	fmt.Fprintf(os.Stderr,
-		"Total Contributing seeds: %d out of %d, in %d implicitly-distilled programs total: %d\n",
+		"Total Contributing calls: %d out of %d, in %d implicitly-distilled programs that consist of: %d calls\n",
 		len(heavyHitters), len(seeds), len(distilled), totalLen)
 	d.Stats(heavyHitters)
 	return

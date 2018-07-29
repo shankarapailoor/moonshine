@@ -68,7 +68,7 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	fmt.Printf("Total Distilled Progs: %d\n", len(distilledProgs))
 	for prog_, _ := range distilledProgs {
 		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
-			fmt.Printf("Error: %s\n", err.Error())
+			//fmt.Printf("Error: %s\n", err.Error())
             		continue
 		}
 
