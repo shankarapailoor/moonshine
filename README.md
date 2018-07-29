@@ -115,4 +115,4 @@ MoonShine's code is concentrated in 4 directories:
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
 
 # Contact
-[Shankara Pailoor](shankarapailoor@gmail.com)
+[Shankara Pailoor](<shankarapailoor@gmail.com>)
