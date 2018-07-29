@@ -7,7 +7,7 @@ import (
 	"os"
 )
 
-func (d *StrongDistiller) Add(seeds Seeds) {
+func (d *ExplicitDistiller) Add(seeds Seeds) {
 	/* builds out CallToIdx which is used for sorting calls in distilled programs */
 	d.Seeds = seeds
 	for _, seed := range seeds {
@@ -28,25 +28,28 @@ func (d *StrongDistiller) Add(seeds Seeds) {
 	}
 }
 
-func (d *StrongDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
+func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	seenIps := make(map[uint64]bool)
 	seeds := d.Seeds
 	fmt.Printf("Computing Min Cover with %d seeds\n", len(seeds))
 	sort.Sort(sort.Reverse(seeds))
-	contributing_seeds := 0  /* how many seeds contribute new coverage? */
+	contributing_seeds := 0  /* how many seeds contribute new coverage */
 	heavyHitters := make(Seeds, 0)  /* all seeds that contribute new coverage */
+	var target *prog.Target = nil
+
 	for _, prog := range progs {
+		if target == nil {
+			target = prog.Target
+		}
 		d.TrackDependencies(prog)
 	}
 	for _, seed := range seeds {
 		var ips int = d.Contributes(seed, seenIps)  /* how many unique Ips does seed contribute */
 		if ips > 0 {
 			heavyHitters.Add(seed)
-			fmt.Printf("Seed: %s contributes: %d ips out of its total of: %d\n", seed.Call.Meta.Name, ips, len(seed.Cover))
 			contributing_seeds += 1
 		}
 	}
-	d.Stats(heavyHitters)
 	for _, seed := range heavyHitters {
 		//Pulls upstream dependencies
 		//If any upstream dependencies are in a distilled prog we add our call to that
@@ -56,37 +59,42 @@ func (d *StrongDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	//At this point our programs are stored in map: Call->Distilled Program
 	//We now want to get the programs
 	distilledProgs := make(map[*prog.Prog]bool)
+
 	for _, seed := range seeds {
 		if _, ok := d.CallToDistilledProg[seed.Call]; ok {
 			distilledProgs[d.CallToDistilledProg[seed.Call]] = true
 		}
 	}
+	fmt.Printf("Total Distilled Progs: %d\n", len(distilledProgs))
 	for prog_, _ := range distilledProgs {
-		seed := d.CallToSeed[prog_.Calls[0]]
-		state := seed.State
 		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
 			fmt.Printf("Error: %s\n", err.Error())
             		continue
 		}
 
 		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
-		mmapCall := state.Target.MakeMmap(0, uint64(totalMemoryAllocations))
 		calls := make([]*prog.Call, 0)
-		calls = append(append(calls, mmapCall), prog_.Calls...)
+		state := d.CallToSeed[prog_.Calls[0]].State
+		if totalMemoryAllocations > 0 {
+			mmapCall := state.Target.MakeMmap(0, uint64(totalMemoryAllocations))
+			calls = append(calls, mmapCall)
+		}
+
+		calls = append(calls, prog_.Calls...)
 
 		prog_.Calls = calls
-		prog_.Target = state.Target
-
-		prog_.Calls = calls
+		prog_.Target = target
 		distilled = append(distilled, prog_)
 	}
+	fmt.Printf("hevyHitters: %d\n", len(heavyHitters))
+	d.Stats(heavyHitters)
 	fmt.Fprintf(os.Stderr, "Total Contributing seeds: %d out of %d, in %d strong-distilled programs\n",
 		   contributing_seeds, len(seeds), len(distilled))
 	return
 }
 
 
-func (d *StrongDistiller) AddToDistilledProg(seed *Seed) {
+func (d *ExplicitDistiller) AddToDistilledProg(seed *Seed) {
 	distilledProg := new(prog.Prog)
 	distilledProg.Calls = make([]*prog.Call, 0)
 	callIndexes := make([]int, 0)

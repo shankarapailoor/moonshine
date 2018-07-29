@@ -12,7 +12,7 @@ type Distiller interface {
 	Stats(Seeds)
 }
 
-type StrongDistiller struct {
+type ExplicitDistiller struct {
 	*DistillerMetadata
 }
 
@@ -20,8 +20,8 @@ func NewDistiller(conf *config.DistillConfig) (d Distiller){
 	switch (conf.Type) {
 	case "weak":
 		d = NewWeakDistiller(conf)
-	case "strong":
-		d = NewStrongDistiller(conf)
+	case "explicit":
+		d = NewExplicitDistiller(conf)
 	case "implicit":
 		d = NewImplicitDistiller(conf)
 	case "trace":
@@ -66,8 +66,8 @@ func NewTraceDistiller(conf *config.DistillConfig) (d *TraceDistiller) {
 }
 
 
-func NewStrongDistiller(conf *config.DistillConfig) (d *StrongDistiller) {
-	d = new(StrongDistiller)
+func NewExplicitDistiller(conf *config.DistillConfig) (d *ExplicitDistiller) {
+	d = new(ExplicitDistiller)
 	dm := &DistillerMetadata{
 		StatFile: conf.Stats,
 		DistilledProgs: make([]*prog.Prog, 0),

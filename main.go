@@ -36,11 +36,11 @@ const (
 )
 
 func main() {
-	fmt.Printf("git revision: %s\n", sys.GitRevision)
+	rev := sys.GitRevision
 	flag.Parse()
 	target, err := prog.GetTarget(OS, Arch)
 	if err != nil {
-		Failf("error getting target: %v", err.Error())
+		Failf("error getting target: %v, git revision: %v", err.Error(), rev)
 	} else {
 		ParseTraces(target)
 		pack("deserialized", "corpus.db")
@@ -74,10 +74,10 @@ func ParseTraces(target *prog.Target) []*Context {
 	totalFiles := len(names)
 	fmt.Printf("Total Number of Files: %d\n", totalFiles)
 	for i, file := range(names) {
-		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, names[i])
+		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
 		tree := Parse(file)
 		if tree == nil {
-			fmt.Fprintf(os.Stderr, "File: %s is empty\n", file)
+			fmt.Fprintf(os.Stderr, "File: %s is empty\n", path.Base(file))
 			continue
 		}
 		ctxs := ParseTree(tree, tree.RootPid, target)
@@ -159,7 +159,6 @@ func ParseTree(tree *strace_types.TraceTree, pid int64, target *prog.Target) []*
 
 	if parsedProg != nil {
 		ctx.Prog = parsedProg
-		fmt.Fprintf(os.Stderr, "Appending program: %s %d\n", tree.Filename, pid)
 		ctxs = append(ctxs, ctx)
 	}
 	for _, pid_ := range(tree.Ptree[pid]) {
@@ -202,6 +201,7 @@ func pack(dir, file string) {
 	if err != nil {
 		Failf("failed to open database file: %v", err)
 	}
+	fmt.Println("Deserializing programs => deserialized/")
 	for _, file := range files {
 		data, err := ioutil.ReadFile(filepath.Join(dir, file.Name()))
 		if err != nil {
@@ -217,7 +217,6 @@ func pack(dir, file string) {
 			}
 		}
 		if sig := hash.String(data); key != sig {
-			fmt.Fprintf(os.Stdout, "fixing hash %v -> %v\n", key, sig)
 			key = sig
 		}
 		db.Save(key, data, seq)

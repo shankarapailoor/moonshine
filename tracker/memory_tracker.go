@@ -202,7 +202,10 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 				offset += a.num_bytes
 				i += 1
 				if arg.Address >= memAllocMaxMem {
-					return fmt.Errorf("Call: %v, address out of range: %d\n", arg.Address)
+					return fmt.Errorf("Unable to allocate space to store arg: %#v" +
+						"in Call: %v. Required memory is larger than what is allowed by Syzkaller." +
+						"Offending address: %d. Skipping seed generation for this prog...\n",
+						arg, call, arg.Address)
 				}
 			default:
 				panic("Pointer Arg Failed")
@@ -222,8 +225,10 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 
 				arg_.Res = nil
 				if arg_.Address >= memAllocMaxMem || arg_.Address+arg_.VmaSize > memAllocMaxMem{
-					return fmt.Errorf("Address out of range: %d. Vma size: %d\n",
-						arg_.Address, arg_.VmaSize)
+					return fmt.Errorf("Unable to allocate space for vma Call: %#v " +
+						"Required memory is larger than what is allowed by Syzkaller." +
+						"Offending address: %d. Skipping seed generation for this prog...\n",
+						mapping.GetCall(), arg_.Address)
 				}
 			default:
 				panic("Mapping needs to be Pointer Arg")

@@ -154,7 +154,7 @@ func (d *DistillerMetadata) Stats(distilledSeeds Seeds) {
 		data := fmt.Sprintf("Total Calls: %d, Distilled: %d\n", totalCalls, distilledCalls)
 		f.WriteString(data)
 		for _, seed := range distilledSeeds {
-			data = fmt.Sprintf("Call: %s Contributes: %d\n", seed.Call.Meta.CallName, len(seed.Cover))
+			data = fmt.Sprintf("%s Contributes: %d\n", seed.Call.Meta.CallName, len(seed.Cover))
 			f.WriteString(data)
 		}
 	}

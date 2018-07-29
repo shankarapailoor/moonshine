@@ -382,7 +382,6 @@ func IdentifySockaddrStorageUnion(ctx *Context) int {
 	case *strace_types.StructType:
 		for i := range strType.Fields {
 			fieldStr := strType.Fields[i].String()
-			fmt.Printf("Field Str: %s\n", fieldStr)
 			if strings.Contains(fieldStr, "AF_INET") {
 				return 1
 			} else if strings.Contains(fieldStr, "AF_INET6") {
