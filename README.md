@@ -7,10 +7,11 @@ MoonShine selects compact and diverse seeds for OS fuzzers by distilling system 
 
 # Getting Started
 
+The following setup instructions have been tested on Ubuntu 16.04. Let us know if there are issues on other versions or distributions.
 ## Requirements
 
 ### Syzkaller and Linux
-MoonShine has been tested with Syzkaller commit f48c20b8f9b2a6c26629f11cc15e1c9c316572c8 (May 19, 2018). Instructions to setup Syzkaller as well as to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
+MoonShine has been tested with Syzkaller commit ```f48c20b8f9b2a6c26629f11cc15e1c9c316572c8```. Instructions to setup Syzkaller as well as to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
 
 
 ### Golang
@@ -51,7 +52,7 @@ Once MoonShine has been successfully built, we can generate distilled seeds for 
 ```
 The arguments are explained as follows
 * ```-dir``` is a directory for traces to be parsed. Instructions to gather traces using strace can be found [here](docs/tracegen.md). We have provided some sample traces [here](https://drive.google.com/file/d/1eKLK9Kvj5tsJVYbjB2PlFXUsMQGASjmW/view?usp=sharing). For this example, download the tarball, move it to the ```getting-started``` directory, and unpack. 
-* ```-distill``` Config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under getting-started/distill.json
+* ```-distill``` Config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under ```getting-started/distill.json```
 #### Example
 
 ```bash
@@ -69,7 +70,7 @@ cp corpus.db ~/$SYZKALLER_WORKDIR
 ### Strace
 Currently, MoonShine can only parse traces gathered with strace. We also suggest that you use strace versions >= 4.16 as those are the only versions we have tried so far. Strace releases can be found [here](https://github.com/strace/strace/releases) and build instructions can be found [here](https://github.com/strace/strace/blob/master/INSTALL).
 
-MoonShine needs to know the coverage achieved by each call in a trace in order to distill traces. We have created a patch ```strace_kcov.patch``` for strace that captures per-call coverage using [kcov](https://lwn.net/Articles/671640/). This patch should be applied to commit a8d2417e97e71ae01095bee1a1e563b07f2d6b41. Follow the below instructions to both build strace and apply the patch.
+MoonShine needs to know the coverage achieved by each call in a trace in order to distill traces. We have created a patch ```strace_kcov.patch``` for strace that captures per-call coverage using [kcov](https://lwn.net/Articles/671640/). This patch should be applied to commit ```a8d2417e97e71ae01095bee1a1e563b07f2d6b41```. Follow the below instructions to both build strace and apply the patch.
 ```bash
 $ cd ~
 $ git clone https://github.com/strace/strace strace
