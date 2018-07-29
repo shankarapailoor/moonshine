@@ -18,7 +18,7 @@ The following setup instructions have been tested on Ubuntu 16.04. Let us know i
 ## Requirements
 
 ### Syzkaller and Linux
-MoonShine has been tested with Syzkaller commit ```f48c20b8f9b2a6c26629f11cc15e1c9c316572c8```. Instructions to setup Syzkaller as well as to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). Although the instructions say they are for Ubuntu 14.04 it also works for Ubuntu 16.04+.
+MoonShine has been tested with Syzkaller commit ```f48c20b8f9b2a6c26629f11cc15e1c9c316572c8```. Instructions to setup Syzkaller and to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). Although the instructions say they are for Ubuntu 14.04 it also works for Ubuntu 16.04+.
 
 
 ### Golang
