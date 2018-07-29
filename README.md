@@ -1,6 +1,6 @@
 # MoonShine: Seed Selection for OS Fuzzers (USENIX '18)
 
-MoonShine selects compact and diverse seeds for OS fuzzers by distilling system call traces of real world programs through lightweight static analysis. Please see our USENIX'18 paper [MoonShine: Optimizing OS Fuzzer Seed Selection with Trace Distillation](http://www.cs.columbia.edu/~suman/docs/moonshine.pdf) for more details. Currently, MoonShine can only generate seeds for Syzkaller on Linux. 
+MoonShine selects compact and diverse seeds for OS fuzzers from system call traces of real world programs. Please see our USENIX'18 paper [MoonShine: Optimizing OS Fuzzer Seed Selection with Trace Distillation](http://www.cs.columbia.edu/~suman/docs/moonshine.pdf) for more details. Currently, MoonShine can only generate seeds for Syzkaller on Linux. 
 
 # Contact
 [Shankara Pailoor](shankarapailoor@gmail.com)
@@ -11,11 +11,11 @@ The following setup instructions have been tested on Ubuntu 16.04. Let us know i
 ## Requirements
 
 ### Syzkaller and Linux
-MoonShine has been tested with Syzkaller commit ```f48c20b8f9b2a6c26629f11cc15e1c9c316572c8```. Instructions to setup Syzkaller as well as to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
+MoonShine has been tested with Syzkaller commit ```f48c20b8f9b2a6c26629f11cc15e1c9c316572c8```. Instructions to setup Syzkaller as well as to build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). Although the instructions say they are for Ubuntu 14.04 it also works for Ubuntu 16.04+.
 
 
 ### Golang
-If Syzkaller has been successfully setup, then golang should already be installed, but in the off-chance it hasn't see [here](https://golang.org/doc/install) for instructions. After installing golang, add $GOPATH/bin to your $PATH
+If Syzkaller has been successfully setup, then golang should already be installed. However, if you want to just run MoonShine on some sample traces, follow the installation instructions [here](https://golang.org/doc/install). After installing golang, add $GOPATH/bin to your $PATH
 ```bash
 export PATH=$PATH:$GOPATH/bin/
 ```
@@ -36,8 +36,6 @@ go get golang.org/x/tools/cmd/goyacc
 ## Build and Run MoonShine
 
 ### Build
-
-
 ```bash
 go get -u github.com/shankarapailoor/moonshine/...
 cd $GOPATH/src/github.com/shankarapailoor/moonshine
@@ -45,14 +43,14 @@ make
 ```
 
 ### Run
-Once MoonShine has been successfully built, we can generate distilled seeds for Syzkaller as follows:
+Once MoonShine has been successfully built, we can generate seeds for Syzkaller as follows:
 
 ```bash
 ./bin/moonshine -dir [tracedir] -distill [distillConfig.json]
 
 ```
 The arguments are explained below:
-* ```-dir``` is a directory for traces to be parsed. Instructions to gather traces using strace can be found [here](docs/tracegen.md). We have provided some sample traces [here](https://drive.google.com/file/d/1eKLK9Kvj5tsJVYbjB2PlFXUsMQGASjmW/view?usp=sharing). For this example, download the tarball, move it to the ```getting-started``` directory, and unpack. 
+* ```-dir``` is a directory for traces to be parsed. Instructions to gather traces using strace can be found [here](docs/tracegen.md). We have provided some sample traces [here](https://drive.google.com/file/d/1eKLK9Kvj5tsJVYbjB2PlFXUsMQGASjmW/view?usp=sharing) to get started. To run the example below, download the tarball, move it to the ```getting-started``` directory, and unpack. 
 * ```-distill``` Config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under ```getting-started/distill.json```
 #### Example
 
@@ -66,7 +64,7 @@ MoonShine produces a ```corpus.db``` file that contains the serialized Syzkaller
 cp corpus.db ~/$SYZKALLER_WORKDIR
 ```
 
-MoonShine also writes the deserialized syzkaller programs from the traces under ```deserialized```
+MoonShine also writes the deserialized syzkaller programs from the traces under ```deserialized``` so that you can manually inspect the conversion. Programs in the deserialized directory have the naming convention ```[trace_name]+[id]```. If the original trace consists of 1 task, ```id``` should always be 1, but if there are multiple tasks then each task is assigned a unique id and converted to a separate program. 
 
 ## Gathering Traces
 
