@@ -2,6 +2,9 @@
 
 MoonShine selects compact and diverse seeds for OS fuzzers by distilling system call traces of real world programs through lightweight static analysis. Please see our USENIX'18 paper [MoonShine: Optimizing OS Fuzzer Seed Selection with Trace Distillation](http://www.cs.columbia.edu/~suman/docs/moonshine.pdf) for more details. MoonShine currently only supports Syzkaller on Linux. 
 
+# Contact
+[Shankara Pailoor](shankarapailoor@gmail.com)
+
 # Getting Started
 
 ## Requirements
