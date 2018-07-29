@@ -21,14 +21,14 @@ export PATH=$PATH:$GOPATH/bin/
 ```
 
 ### Ragel
-MoonShine uses [ragel](http://www.colm.net/open-source/ragel/) (variation of lex) to scan traces.
+MoonShine uses [ragel](http://www.colm.net/open-source/ragel/) (variation of lex) to scan/parse traces.
 ```bash
 sudo apt-get update
 sudo apt-get install ragel
 ```
 
 ### Goyacc
-MoonShine uses [goyacc](https://godoc.org/golang.org/x/tools/cmd/goyacc) (variation of yacc) to parse traces 
+MoonShine uses [goyacc](https://godoc.org/golang.org/x/tools/cmd/goyacc) (variation of yacc) to scan/parse traces 
 ```bash
 go get golang.org/x/tools/cmd/goyacc
 ```
@@ -100,3 +100,11 @@ $ make
 ```bash
 $ strace -o tracefile -s 65500 -v -xx -f -k /path/to/executable arg1 arg2 .. argN
 ```
+# Project Structure
+
+MoonShine's code is concentrated in 4 directories:
+
+* ```strace_types``` - contains data structures corresponding to high level types present in the strace traces such as call, structs, int, flag, etc.. In essence, this these types are composed to provide in-memory representation of the Trace
+* ```scanner``` - scans and parses strace programs into their in-memory representation
+* ```parser``` - converts the in-memory trace representation into a Syzkaller program
+* ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
