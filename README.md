@@ -8,9 +8,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Build and Run MoonShine](#build-and-run-moonshine)
     * [Collecting Traces](#collecting-traces)
 * [Project Structure](#project-structure)
-
-# Contact
-[Shankara Pailoor](shankarapailoor@gmail.com)
+* [Contact](#contact)
 
 # Getting Started
 
@@ -115,3 +113,6 @@ MoonShine's code is concentrated in 4 directories:
 * ```scanner``` - scans and parses strace programs into their in-memory representation
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
+
+# Contact
+[Shankara Pailoor](shankarapailoor@gmail.com)
