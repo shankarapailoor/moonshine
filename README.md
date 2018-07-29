@@ -7,6 +7,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Requirements](#requirements)
     * [Build and Run MoonShine](#build-and-run-moonshine)
     * [Collecting Traces](#collecting-traces)
+* [Project Structure](#project-structure)
 
 # Contact
 [Shankara Pailoor](shankarapailoor@gmail.com)
