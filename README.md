@@ -63,7 +63,7 @@ Once MoonShine has been successfully built, we can generate distilled seeds for 
 
 ```
 The arguments are explained as follows
-* ```-dir``` should contain the traces. Instructions to gather traces using strace can be found [here](docs/tracegen.md). To get started we have provided a tarball with sample traces gathered from the Linux Testing Project (LTP) and KSelftests under getting-started/strace-output.tar.gz
+* ```-dir``` should contain the traces. Instructions to gather traces using strace can be found [here](docs/tracegen.md). To get started we have provided a tarball with sample traces gathered from the Linux Testing Project (LTP) and KSelftests under getting-started/sampletraces.tar.gz
 * ```-distill``` Distillation config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter can be ommitted and MoonShine will generate traces "as is". We have provided an example config under getting-started/distill.json
 #### Example
 
@@ -71,7 +71,7 @@ The arguments are explained as follows
 ./bin/moonshine -dir getting-started/sampletraces/ -distill implciit
 ```
 
-MoonShine can also take a single trace with the ```-file``` flag instead of ```-dir```. 
+MoonShine can also take a single trace with the ```-file``` flag instead of ```-dir```. A successful distillation will produce a corpus.db file to be used as seeds for Syzkaller. The 
 
 ## Gathering Traces
 

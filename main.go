@@ -92,7 +92,7 @@ func ParseTraces(target *prog.Target) []*Context {
 					continue
 				}
 				i += 1
-				s_name := "serialized/" + filepath.Base(file) + strconv.Itoa(i)
+				s_name := "deserialized/" + filepath.Base(file) + strconv.Itoa(i)
 				if err := ioutil.WriteFile(s_name, ctx.Prog.Serialize(), 0640); err != nil {
 					Failf("failed to output file: %v", err)
 				}
