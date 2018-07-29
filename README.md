@@ -53,7 +53,7 @@ Once MoonShine has been successfully built, we can generate distilled seeds for 
 ```
 The arguments are explained below:
 * ```-dir``` is a directory for traces to be parsed. Instructions to gather traces using strace can be found [here](docs/tracegen.md). We have provided some sample traces [here](https://drive.google.com/file/d/1eKLK9Kvj5tsJVYbjB2PlFXUsMQGASjmW/view?usp=sharing). For this example, download the tarball, move it to the ```getting-started``` directory, and unpack. 
-* ```-distill``` Config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under ```getting-started/distill.json```
+* ```-distill``` Config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under ```getting-started/distill.json```
 #### Example
 
 ```bash
