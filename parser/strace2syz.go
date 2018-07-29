@@ -481,11 +481,6 @@ func Parse_BufferType(syzType *prog.BufferType, straceType strace_types.Type, ct
 	var bufVal []byte
 	switch a := straceType.(type) {
 	case *strace_types.BufferType:
-		switch syzType.Kind {
-		case prog.BufferFilename:
-			a.Val = SanitizeFilename(a.Val)
-		}
-
 		bufVal = []byte(a.Val)
 	case *strace_types.Expression:
 		val := a.Eval(ctx.Target)

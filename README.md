@@ -10,7 +10,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers by distilling system 
 ## Requirements
 
 ### Syzkaller and Linux
-MoonShine has been tested with Syzkaller commit f48c20b8f9b2a6c26629f11cc15e1c9c316572c8 (May 19, 2018). Instructions to setup Syzkaller as well as build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md).
+MoonShine has been tested with Syzkaller commit f48c20b8f9b2a6c26629f11cc15e1c9c316572c8 (May 19, 2018). Instructions to setup Syzkaller as well as build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md). 
 
 
 ### Golang
@@ -66,15 +66,19 @@ Once MoonShine has been successfully built, we can generate distilled seeds for 
 
 ```
 The arguments are explained as follows
-* ```-dir``` should contain the traces. Instructions to gather traces using strace can be found [here](docs/tracegen.md). To get started we have provided a tarball with sample traces gathered from the Linux Testing Project (LTP) and KSelftests under getting-started/sampletraces.tar.gz
-* ```-distill``` Distillation config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter can be ommitted and MoonShine will generate traces "as is". We have provided an example config under getting-started/distill.json
+* ```-dir``` is the directory that contain the traces. Instructions to gather traces using strace can be found [here](docs/tracegen.md). To get started we have provided a tarball with sample traces gathered from the Linux Testing Project (LTP) and KSelftests under getting-started/sampletraces.tar.gz
+* ```-distill``` Distillation config file that specifies the distillation strategy (e.g. implicit, explicit only). If the traces in tracedir don't have call coverage information, then this parameter should be ommitted and MoonShine will generate traces "as is". We have provided an example config under getting-started/distill.json
 #### Example
 
 ```bash
 ./bin/moonshine -dir getting-started/sampletraces/ -distill getting-started/distill.json
 ```
 
-MoonShine can also take a single trace with the ```-file``` flag instead of ```-dir```. A successful distillation will produce a corpus.db file to be used as seeds for Syzkaller. The 
+MoonShine produces a ```corpus.db``` file that contains the serialized Syzkaller programs. Move the seeds to your Syzkaller workdir.  
+ 
+```bash
+cp corpus.db ~/$SYZKALLER_WORKDIR
+```
 
 ## Gathering Traces
 
