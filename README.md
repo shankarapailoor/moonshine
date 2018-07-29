@@ -6,7 +6,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers by distilling system 
 
 ## Requirements
 
-###Syzkaller and Linux
+### Syzkaller and Linux
 MoonShine has been tested with Syzkaller commit f48c20b8f9b2a6c26629f11cc15e1c9c316572c8 (May 19, 2018). Instructions to setup Syzkaller as well as build Linux disk images for fuzzing can be found [here](https://github.com/google/syzkaller/blob/master/docs/linux/setup_ubuntu-host_qemu-vm_x86-64-kernel.md).
 
 
