@@ -66,7 +66,7 @@ Total contributing calls: 639 out of 43480 in 388 implicitly-distilled programs.
 
 MoonShine produces a ```corpus.db``` file that contains the serialized Syzkaller programs. Move ```corpus.db``` to your Syzkaller workdir and begin fuzzing!
 
-MoonShine also writes the deserialized syzkaller programs from the traces under ```deserialized``` so that you can manually inspect the conversion. Programs in the deserialized directory have the naming convention ```[trace_name]+[id]```. If the original trace consists of 1 task, ```id``` should always be 1, but if there are multiple tasks then each task is assigned a unique id and converted to a separate program. 
+MoonShine also writes the deserialized syzkaller programs from the traces under ```deserialized``` so that you can manually inspect the conversion. If moonshine was run without distillation, then the programs in the deserialized directory obey the naming convention ```[trace_name]+[id]```. If the original trace consists of 1 task, ```id``` should always be 1, but if there are multiple tasks then each task is assigned a unique id and converted to a separate program. 
 
 ```bash
 $ ls deserialized/
