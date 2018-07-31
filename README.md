@@ -120,7 +120,7 @@ MoonShine's code is concentrated in 4 directories:
 * ```scanner``` - scans and parses strace programs into their in-memory representation
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces.
-* ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch Checkers. 
+* ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch static analysis checkers. 
 
 # Citing MoonShine
 ```
