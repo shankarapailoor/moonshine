@@ -123,7 +123,7 @@ MoonShine's code is concentrated in 4 directories:
 
 # Citing MoonShine
 ```
-@inproceedings {217573,
+@inproceedings {Pailoor18,
    author = {Shankara Pailoor and Andrew Aday and Suman Jana},
    title = {MoonShine: Optimizing {OS} Fuzzer Seed Selection with Trace Distillation},
    booktitle = {27th {USENIX} Security Symposium ({USENIX} Security 18)},
