@@ -42,11 +42,15 @@ go get golang.org/x/tools/cmd/goyacc
 ```
 goyacc gets installed in ```$HOME/go/bin``` (or ```$GOPATH/bin``` if workspace is not in the home directory). Make sure this directory is on your $PATH.
 
+```bash
+$ export PATH=PATH:$HOME/go/bin
+```
+
 ## Build and Run MoonShine
 
 ### Build
 ```bash
-go get -u github.com/shankarapailoor/moonshine/...
+go get -u -d github.com/shankarapailoor/moonshine/...
 cd $GOPATH/src/github.com/shankarapailoor/moonshine
 make
 ```
