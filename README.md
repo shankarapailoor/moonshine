@@ -17,7 +17,7 @@ The following setup instructions have been tested on Ubuntu 16.04. Let us know i
 ## Requirements
 
 ### Go
-MoonShine is mostly written in Go so the first step is to setup Go. You can either follow the below instructions to install or follow the [Official Go Installation Guide](https://golang.org/doc/install) . 
+MoonShine is mostly written in Go so the first step is to setup Go. You can either follow the below instructions or follow the [Official Go Installation Guide](https://golang.org/doc/install) . 
 
 ```bash
 $ wget https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz
