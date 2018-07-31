@@ -121,6 +121,19 @@ MoonShine's code is concentrated in 4 directories:
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
 
+# Citing MoonShine
+```
+@inproceedings {217573,
+   author = {Shankara Pailoor and Andrew Aday and Suman Jana},
+   title = {MoonShine: Optimizing {OS} Fuzzer Seed Selection with Trace Distillation},
+   booktitle = {27th {USENIX} Security Symposium ({USENIX} Security 18)},
+   year = {2018},
+   address = {Baltimore, MD},
+   url = {https://www.usenix.org/conference/usenixsecurity18/presentation/pailoor},
+   publisher = {{USENIX} Association},
+}
+```
+
 # Contributors
 * Shankara Pailoor - <sp3485@columbia.edu>
 * [Suman Jana](https://sumanj.info) - <suman@cs.columbia.edu>
