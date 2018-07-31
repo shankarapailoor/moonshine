@@ -39,11 +39,12 @@ func (lex *lexer) Lex(out *StraceSymType) int {
     %%{
         dateSep = '-' | '\/';
         datetimeSep = 'T' | '-';
+        microTimeSep = '+' | '-';
         date = digit{4}.dateSep.digit{2}.dateSep.digit{2};
         nullptr = "NULL";
         time = digit{2}.':'.digit{2}.':'.digit{2} |
-            digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4} |
-            digit{2}.':'.digit{2}.':'.digit{2}.'+'.digit{4}.'.'.digit+ |
+            digit{2}.':'.digit{2}.':'.digit{2}.microTimeSep.digit{4} |
+            digit{2}.':'.digit{2}.':'.digit{2}.microTimeSep.digit{4}.'.'.digit+ |
             digit{2}.':'.digit{2}.':'.digit{2}.'.'.digit+;
         datetime = date.datetimeSep.time;
         unfinished = '<unfinished ...>' | ',  <unfinished ...>';
@@ -53,8 +54,9 @@ func (lex *lexer) Lex(out *StraceSymType) int {
         resumed = '<... '.identifier+.' resumed>'
                     | '<... '.identifier+.' resumed> ,'
                     | '<... resuming'.' '.identifier.' '.identifier.' '.'...>';
-        ipv4 = '\"'.digit{1,4}.'\.'.digit{1,4}.'\.'digit{1,4}.'\.'.digit{1,4}'\"';
-        ipv6 = '\"'.':'.':'.'\"' | '\"'.':'.':'.digit.'\"';
+        ipv4Base = digit{1,4}.'\.'.digit{1,4}.'\.'.digit{1,4}.'\.'.digit{1,4};
+        ipv4 = '\"'.ipv4Base.'\"';
+        ipv6 = '\"'.':'.':'.'\"' | '\"'.':'.':'.digit.'\"' | '\"'.':'.':'xdigit+.':'.ipv4Base.'\"';
         flag = (['_']+?upper+ . ['_'A-Z0-9]+)-nullptr;
         string = '\"'.['_'('')'' ''#'':'0-9a-zA-Z\/\\\*]*.'\"'- (ipv4 | ipv6);
         mac = xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2}.':'.xdigit{2};

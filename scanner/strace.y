@@ -113,6 +113,8 @@ syscall:
                                                         Stracelex.(*lexer).result = $$ }
     | RESUMED types RPAREN EQUALS UINT FLAG LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
                                                             Stracelex.(*lexer).result = $$ }
+    | RESUMED types RPAREN EQUALS INT FLAG LPAREN parentheticals RPAREN { $$ = types.NewSyscall(-1, "tmp", $2, int64($5), false, true);
+                                                            Stracelex.(*lexer).result = $$ }
     | IDENTIFIER LPAREN RPAREN EQUALS INT %prec NOFLAG { $$ = types.NewSyscall(-1, $1, nil, $5, false, false);
                                                             Stracelex.(*lexer).result = $$;}
     | IDENTIFIER LPAREN types RPAREN EQUALS INT %prec NOFLAG{

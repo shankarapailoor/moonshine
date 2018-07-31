@@ -266,15 +266,12 @@ func Parse_ArrayType(syzType *prog.ArrayType, straceType strace_types.Type, ctx 
 	case *strace_types.PointerType, *strace_types.Expression, *strace_types.BufferType:
 		return GenDefaultArg(syzType, ctx), nil
 	default:
-		Failf("Error parsing Array with Wrong Type: %s", straceType.Name())
+		Failf("Error parsing Array: %s with Wrong Type: %s\n", syzType.FldName, straceType.Name())
 	}
 	return strace_types.GroupArg(syzType, args), nil
 }
 
 func Parse_StructType(syzType *prog.StructType, straceType strace_types.Type, ctx *Context) (prog.Arg, error) {
-	if syzType.Dir() == prog.DirOut {
-		return GenDefaultArg(syzType, ctx), nil
-	}
 	straceType = PreprocessStruct(syzType, straceType, ctx)
 	args := make([]prog.Arg, 0)
 	switch a := straceType.(type) {
