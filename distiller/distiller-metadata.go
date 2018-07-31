@@ -149,7 +149,7 @@ func (d *DistillerMetadata) Stats(distilledSeeds Seeds) {
 	} else {
 		f, err := os.OpenFile(d.StatFile, os.O_CREATE|os.O_APPEND|os.O_RDWR, 0600)
 		if err != nil {
-			fmt.Printf("Error opening stat file: %v\n", err.Error)
+			fmt.Printf("Error opening stat file: %s\n", err.Error())
 		}
 		data := fmt.Sprintf("Total Calls: %d, Distilled: %d\n", totalCalls, distilledCalls)
 		f.WriteString(data)

@@ -174,8 +174,7 @@ func dedupSyscalls(calls []*prog.Call) []*prog.Call {
 func (d *ImplicitDistiller) AddImplicitDependencies(
 	calls []*prog.Call,
 	seed *Seed,
-	seenMap map[int]bool,
-) []*prog.Call {
+	seenMap map[int]bool) []*prog.Call {
 	/* Recursively collect implicit --> explicit --> implicit ... dependencies */
 	implicit_callmap := make(map[string]bool, 0)
 	implicit_calls := make([]*prog.Call, 0)

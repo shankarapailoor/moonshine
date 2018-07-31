@@ -87,7 +87,7 @@ func ParseTraces(target *prog.Target) []*Context {
 			ctx.Prog.Target = ctx.Target
 			if !distill {
 				if err := FillOutMemory(ctx.Prog, ctx.State.Tracker); err != nil {
-					//fmt.Fprintln(os.Stderr, "Failed to fill out memory\n")
+					//fmt.Fprintln(os.Stderr, "Failed to fill out memory")
 					continue
 				}
 				if progIsTooLarge(ctx.Prog) {
