@@ -119,7 +119,8 @@ MoonShine's code is concentrated in 4 directories:
 * ```strace_types``` - contains data structures corresponding to high level types present in the strace traces such as call, structs, int, flag, etc.. In essence, this these types are composed to provide in-memory representation of the Trace
 * ```scanner``` - scans and parses strace programs into their in-memory representation
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
-* ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
+* ```distiller``` - distills the Syzkaller using the coverage gathered from traces.
+* ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch Checkers. 
 
 # Citing MoonShine
 ```
