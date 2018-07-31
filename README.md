@@ -9,7 +9,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Collecting Traces](#collecting-traces)
     * [Setup Syzkaller](#syzkaller-and-linux)
 * [Project Structure](#project-structure)
-* [Contact](#contact)
+* [Contributors](#contributors)
 
 # Getting Started
 
@@ -121,5 +121,7 @@ MoonShine's code is concentrated in 4 directories:
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces. 
 
-# Contact
-[Shankara Pailoor](<shankarapailoor@gmail.com>)
+# Contributors
+* Shankara Pailoor - <sp3485@columbia.edu>
+* [Suman Jana](https://sumanj.info) - <suman@cs.columbia.edu>
+* Andrew Aday - <andrew.aday@columbia.edu>
