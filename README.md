@@ -136,10 +136,14 @@ MoonShine's code is concentrated in 5 directories:
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces.
 * ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch static analysis checkers. 
 
-# Trophies
-* [Memory Corruption in Inotify](https://access.redhat.com/security/cve/cve-2017-7533) (CVE-2017-7533)
-* [Denial of Serivce in Socket Setattr](https://access.redhat.com/security/cve/cve-2018-12232) (CVE-2018-12232)
-* [Memory Corruption in JFS setxattr](https://access.redhat.com/security/cve/cve-2018-12233) (CVE-2018-12233)
+# Bug Trophy Case
+* [Memory Corruption in inotify](https://access.redhat.com/security/cve/cve-2017-7533) (CVE-2017-7533)
+* [Memory Corruption in jfs setxattr](https://access.redhat.com/security/cve/cve-2018-12233) (CVE-2018-12233)
+* [Denial of Serivce in socket setattr](https://access.redhat.com/security/cve/cve-2018-12232) (CVE-2018-12232)
+* [Use after free in inet_child_forget](https://lkml.org/lkml/2017/9/11/447)
+* [Use after free in move_expired_inodes](https://lkml.org/lkml/2017/10/31/455)
+* [Integer overflow in pipe_set_size()](https://lkml.org/lkml/2017/9/11/458)
+* [Deadlock in Reiserfs](https://lkml.org/lkml/2017/9/29/611)
 
 # Citing MoonShine
 ```
