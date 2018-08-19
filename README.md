@@ -140,7 +140,7 @@ MoonShine's code is concentrated in 5 directories:
 * [Memory Corruption in inotify_handle_event()](https://access.redhat.com/security/cve/cve-2017-7533) (CVE-2017-7533)
 * [Memory Corruption in __jfs_setxattr()](https://access.redhat.com/security/cve/cve-2018-12233) (CVE-2018-12233)
 * [Denial of Serivce in socket_setattr()](https://access.redhat.com/security/cve/cve-2018-12232) (CVE-2018-12232)
-* [Use after free in inet_child_forget()](https://lkml.org/lkml/2017/9/8/230)
+* [Double free in inet_child_forget()](https://lkml.org/lkml/2017/9/8/230)
 * [Use after free in move_expired_inodes()](https://lkml.org/lkml/2017/10/31/455)
 * [Integer overflow in pipe_set_size()](https://lkml.org/lkml/2017/9/11/458)
 * [Integer overflow in posix_cpu_timer_set()](http://lkml.iu.edu/hypermail/linux/kernel/1709.0/02473.html)
