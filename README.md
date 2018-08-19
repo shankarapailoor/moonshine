@@ -137,9 +137,9 @@ MoonShine's code is concentrated in 5 directories:
 * ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch static analysis checkers. 
 
 # Trophies
-* [CVE-2017-7533](https://access.redhat.com/security/cve/cve-2017-7533)
-* [CVE-2018-12232](https://access.redhat.com/security/cve/cve-2018-12232)
-* [CVE-2018-12233](https://access.redhat.com/security/cve/cve-2018-12233)
+* [Memory Corruption in Inotify](https://access.redhat.com/security/cve/cve-2017-7533) (CVE-2017-7533)
+* [Denial of Serivce in Socket Setattr](https://access.redhat.com/security/cve/cve-2018-12232) (CVE-2018-12232)
+* [Memory Corruption in JFS setxattr](https://access.redhat.com/security/cve/cve-2018-12233) (CVE-2018-12233)
 
 # Citing MoonShine
 ```
