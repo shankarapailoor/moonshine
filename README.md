@@ -9,6 +9,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Collecting Traces](#collecting-traces)
     * [Setup Syzkaller](#syzkaller-and-linux)
 * [Project Structure](#project-structure)
+* [Trophies](#trophies)
 * [Contributors](#contributors)
 
 # Getting Started
@@ -134,6 +135,11 @@ MoonShine's code is concentrated in 5 directories:
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces.
 * ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch static analysis checkers. 
+
+# Trophies
+* [CVE-2017-7533](https://access.redhat.com/security/cve/cve-2017-7533)
+* [CVE-2018-12232](https://access.redhat.com/security/cve/cve-2018-12232)
+* [CVE-2018-12233](https://access.redhat.com/security/cve/cve-2018-12233)
 
 # Citing MoonShine
 ```
