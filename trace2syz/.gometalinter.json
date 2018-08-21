@@ -7,18 +7,6 @@
   "linelength": 120,
   "cyclo": 24,
   "duplthreshold": 60,
-  "skip": [
-    "bin",
-    "configs",
-    "deserialized",
-    "distiller",
-    "getting-started",
-    "implicit-dependencies",
-    "parser",
-    "scanner",
-    "straceTypes",
-    "tracker"
-    ],
   "enable": [
     "gofmt",
     "golint",
