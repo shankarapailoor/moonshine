@@ -17,10 +17,8 @@
     "parser",
     "scanner",
     "straceTypes",
-    "tracker",
-    "trace2syz/lex.go",
-    "trace2syz/strace.go"
-  ],
+    "tracker"
+    ],
   "enable": [
     "gofmt",
     "golint",
@@ -39,6 +37,8 @@
     "lll"
   ],
   "exclude": [
+    "(lex.go)",
+    "(strace.go)",
     "(sys/(akaros|freebsd|fuchsia|linux|netbsd|test|windows)/init.*|sys/targets/common.go).* don't use ALL_CAPS in Go names",
     "exported .* should have comment",
     "comment on .* should be of the form",
