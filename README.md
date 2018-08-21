@@ -9,6 +9,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Collecting Traces](#collecting-traces)
     * [Setup Syzkaller](#syzkaller-and-linux)
 * [Project Structure](#project-structure)
+* [Trophies](#trophies)
 * [Contributors](#contributors)
 
 # Getting Started
@@ -42,11 +43,15 @@ go get golang.org/x/tools/cmd/goyacc
 ```
 goyacc gets installed in ```$HOME/go/bin``` (or ```$GOPATH/bin``` if workspace is not in the home directory). Make sure this directory is on your $PATH.
 
+```bash
+$ export PATH=PATH:$HOME/go/bin
+```
+
 ## Build and Run MoonShine
 
 ### Build
 ```bash
-go get -u github.com/shankarapailoor/moonshine/...
+go get -u -d github.com/shankarapailoor/moonshine/...
 cd $GOPATH/src/github.com/shankarapailoor/moonshine
 make
 ```
@@ -130,6 +135,16 @@ MoonShine's code is concentrated in 5 directories:
 * ```parser``` - converts the in-memory trace representation into a Syzkaller program
 * ```distiller``` - distills the Syzkaller using the coverage gathered from traces.
 * ```implicit-dependencies``` - contains a json of the implicit dependencies found by our Smatch static analysis checkers. 
+
+# Bug Trophy Case
+* [Memory Corruption in inotify_handle_event()](https://access.redhat.com/security/cve/cve-2017-7533) (CVE-2017-7533)
+* [Memory Corruption in __jfs_setxattr()](https://access.redhat.com/security/cve/cve-2018-12233) (CVE-2018-12233)
+* [Denial of Serivce in socket_setattr()](https://access.redhat.com/security/cve/cve-2018-12232) (CVE-2018-12232)
+* [Double free in inet_child_forget()](https://lkml.org/lkml/2017/9/8/230)
+* [Use after free in move_expired_inodes()](https://lkml.org/lkml/2017/10/31/455)
+* [Integer overflow in pipe_set_size()](https://lkml.org/lkml/2017/9/11/458)
+* [Integer overflow in posix_cpu_timer_set()](http://lkml.iu.edu/hypermail/linux/kernel/1709.0/02473.html)
+* [Deadlock in Reiserfs](https://lkml.org/lkml/2017/9/29/611)
 
 # Citing MoonShine
 ```
