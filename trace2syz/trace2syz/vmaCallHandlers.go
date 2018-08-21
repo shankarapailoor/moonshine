@@ -2,6 +2,7 @@ package trace2syz
 
 import (
 	//"fmt"
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
 )
 
@@ -33,7 +34,6 @@ func ParseMemoryCall(ctx *Context) *prog.Call {
 	} else if straceCall.CallName == "shmat" {
 		return ParseShmat(syzCall.Meta, straceCall, ctx)
 	}
-
 	return nil
 }
 
@@ -45,7 +45,7 @@ func ParseMmap(mmap *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call {
 	ctx.CurrentSyzCall = call
 
 	length := (ParseLength(syscall.Args[1], ctx)/pageSize + 1) * pageSize
-
+	log.Logf(3, "mmap call: %#v requires %d memory", syscall, length)
 	addrArg, start := ParseAddr(length, mmap.Args[0], syscall.Args[0], ctx)
 	lengthArg := prog.MakeConstArg(mmap.Args[1], length)
 	protArg := ParseFlags(mmap.Args[2], syscall.Args[2], ctx, false)
@@ -325,7 +325,9 @@ func ParseFlags(syzType prog.Type, straceType irType, ctx *Context, mapFlag bool
 }
 
 func ParseFd(syzType prog.Type, straceType irType, ctx *Context) prog.Arg {
+	log.Logf(3, "Parsing file descriptor for call: %s\n", ctx.CurrentStraceCall.CallName)
 	if arg := ctx.ReturnCache.get(syzType, straceType); arg != nil {
+		log.Logf(3, "File descriptor: %s in the cache\n", straceType.String())
 		return prog.MakeResultArg(arg.Type(), arg.(*prog.ResultArg), arg.Type().Default())
 	}
 	switch a := straceType.(type) {

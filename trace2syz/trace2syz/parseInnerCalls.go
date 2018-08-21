@@ -1,8 +1,8 @@
 package trace2syz
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
-	"github.com/shankarapailoor/moonshine/logging"
 )
 
 func parseInnerCall(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
@@ -18,7 +18,7 @@ func parseInnerCall(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 	case "makedev":
 		return makedev(syzType, traceType, ctx)
 	default:
-		logging.Failf("Inner Call: %s Unsupported", traceType.CallName)
+		log.Fatalf("Inner Call: %s Unsupported", traceType.CallName)
 	}
 	return nil
 }
@@ -62,7 +62,7 @@ func htonsHtonl(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 			panic("First arg of Htons/Htonl is not expression")
 		}
 	default:
-		logging.Failf("First arg of Htons/Htonl is not const Type: %s\n", syzType.Name())
+		log.Fatalf("First arg of Htons/Htonl is not const Type: %s\n", syzType.Name())
 	}
 	return nil
 }
@@ -98,7 +98,7 @@ func inetPton(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 	var optType prog.Type
 	var innerArg prog.Arg
 	if len(traceType.Args) != 3 {
-		logging.Failf("InetPton expects 3 args: %v.", traceType.Args)
+		log.Fatalf("InetPton expects 3 args: %v.", traceType.Args)
 	}
 	switch a := traceType.Args[1].(type) {
 	case *ipType:

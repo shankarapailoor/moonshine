@@ -3,7 +3,7 @@ package trace2syz
 import (
 	"bufio"
 	"fmt"
-	"github.com/shankarapailoor/moonshine/logging"
+	"github.com/google/syzkaller/pkg/log"
 	"io/ioutil"
 	"strconv"
 	"strings"
@@ -64,17 +64,19 @@ func parseLoop(scanner *bufio.Scanner, traceType string) (tree *TraceTree) {
 			continue
 		} else if strings.Contains(line, coverID) {
 			cover := parseIps(line)
+			log.Logf(4, "Cover: %d", len(cover))
 			//fmt.Printf("Cover: %d\n", len(cover))
 			lastCall.Cover = cover
 			continue
 
 		} else {
+			log.Logf(4, "Scanning call: %s\n", line)
 			ret, call := parseSyscall(scanner, traceType)
 			if ret != 0 {
-				fmt.Printf("Error parsing line: %s\n", line)
+				log.Logf(0, "Error parsing line: %s\n", line)
 			}
 			if call == nil {
-				logging.Failf("Failed to parse line: %s\n", line)
+				log.Fatalf("Failed to parse line: %s\n", line)
 			}
 			lastCall = tree.Add(call)
 			//trace.Calls = append(trace.Calls, call)
@@ -93,7 +95,7 @@ func Parse(filename string, traceType string) *TraceTree {
 	var err error
 
 	if data, err = ioutil.ReadFile(filename); err != nil {
-		logging.Failf("error reading file: %s\n", err.Error())
+		log.Fatalf("error reading file: %s\n", err.Error())
 	}
 	buf := make([]byte, maxBufferSize)
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))

@@ -448,7 +448,11 @@ type ints []*intType
 
 func (f flags) Eval(target *prog.Target) uint64 {
 	if len(f) > 1 {
-		panic("Unable to Evaluate Set")
+		var val uint64 = 0
+		for _, flag := range f {
+			val |= flag.Eval(target)
+		}
+		return val
 	} else if len(f) == 1 {
 		return f[0].Eval(target)
 	} else {

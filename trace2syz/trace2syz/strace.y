@@ -233,6 +233,7 @@ field_type:
     | IDENTIFIER EQUALS type {$$ = newField($1, $3);}
     | IDENTIFIER COLON type {$$ = newField($1, $3);}
     | IDENTIFIER EQUALS AT type {$$ = newField($1, $4);}
+    | IDENTIFIER LBRACKET_SQUARE FLAG RBRACKET_SQUARE EQUALS type {$$ = newField($1, $6)}
 
 buf_type:
     STRING_LITERAL {$$ = newBufferType($1)}

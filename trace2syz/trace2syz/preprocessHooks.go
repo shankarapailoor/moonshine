@@ -1,8 +1,8 @@
 package trace2syz
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
-	"github.com/shankarapailoor/moonshine/logging"
 )
 
 type preprocessHook func(ctx *Context)
@@ -254,7 +254,7 @@ func modifyLdt(ctx *Context) {
 			suffix = "$write2"
 		}
 	default:
-		logging.Failf("Preprocess modifyldt received unexpected strace type: %s\n", a.Name())
+		log.Fatalf("Preprocess modifyldt received unexpected strace type: %s\n", a.Name())
 	}
 	ctx.CurrentStraceCall.CallName = ctx.CurrentStraceCall.CallName + suffix
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
@@ -268,7 +268,7 @@ func shmget(ctx *Context) {
 			size := a.Eval(ctx.Target)
 			ctx.State.Tracker.addShmRequest(uint64(ctx.CurrentStraceCall.Ret), size)
 		default:
-			logging.Failf("shmctl could not evaluate size of buffer: %#v\n", a)
+			log.Fatalf("shmctl could not evaluate size of buffer: %#v\n", a)
 		}
 	}
 }

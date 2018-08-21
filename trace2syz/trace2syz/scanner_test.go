@@ -137,7 +137,8 @@ func TestParseLoop1Grandchild(t *testing.T) {
 }
 
 func TestParseLoopIrTypes(t *testing.T) {
-	data := `open(MAKEDEV(1), {1, field1="\xff\xff", {1, 2, 3}, [1, 2, 3], [1 2], field2=inet_pton("\xff\xff"), NULL}) = 3`
+	data := `open(MAKEDEV(1), {1, field1="\xff\xff", {1, 2, 3}` +
+		`, [1, 2, 3], [1 2], field2=inet_pton("\xff\xff"), NULL, c_cc[VMIN]=1}, TCSETS or TCGETS) = 3`
 	scanner := initialize(data)
 	tree := parseLoop(scanner, Strace)
 	syscall := tree.TraceMap[tree.RootPid].Calls[0]
@@ -197,7 +198,19 @@ func TestParseLoopIrTypes(t *testing.T) {
 		default:
 			t.Fatalf("Expected argument to be pointer type. Got: %s\n", b.Name())
 		}
+
+		switch b := a.Fields[7].(type) {
+		case *field:
+		default:
+			t.Fatalf("Expected argument to be field type. Got: %s\n", b.Name())
+		}
+
 	default:
 		t.Fatalf("First argument should be int, got: %s\n", a.Name())
+	}
+	switch a := syscall.Args[2].(type) {
+	case *expression:
+	default:
+		t.Fatalf("Expected argument to be expression type. Got: %s\n", a.Name())
 	}
 }
