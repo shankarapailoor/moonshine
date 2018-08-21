@@ -1,11 +1,11 @@
-package scanner
+//nolint
+package trace2syz
 
 import (
     "fmt"
     "encoding/hex"
     "strconv"
     "strings"
-    "github.com/shankarapailoor/moonshine/straceTypes"
 )
 
 %%{
@@ -16,15 +16,15 @@ import (
     variable pe lex.pe;
 }%%
 
-type lexer struct {
-    result *straceTypes.Syscall
+type Stracelexer struct {
+    result *Syscall
     data []byte
     p, pe, cs int
     ts, te, act int
 }
 
-func newLexer (data []byte) *lexer {
-    lex := &lexer {
+func newStraceLexer (data []byte) *Stracelexer {
+    lex := &Stracelexer {
         data: data,
         pe: len(data),
     }
@@ -33,7 +33,7 @@ func newLexer (data []byte) *lexer {
     return lex
 }
 
-func (lex *lexer) Lex(out *StraceSymType) int {
+func (lex *Stracelexer) Lex(out *StraceSymType) int {
     eof := lex.pe
     tok := 0
     %%{
@@ -116,7 +116,7 @@ func (lex *lexer) Lex(out *StraceSymType) int {
     return tok;
 }
 
-func (lex *lexer) Error(e string) {
+func (lex *Stracelexer) Error(e string) {
     fmt.Println("error:", e)
 }
 

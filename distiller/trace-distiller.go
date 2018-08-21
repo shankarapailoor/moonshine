@@ -1,20 +1,20 @@
 package distiller
 
 import (
-	"github.com/google/syzkaller/prog"
-	"sort"
 	"fmt"
+	"github.com/google/syzkaller/prog"
 	"os"
+	"sort"
 )
 
 type TraceDistiller struct {
-	*DistillerMetadata
+	*Metadata
 }
 
 type Traces []*Trace
 
 type Trace struct {
-	Prog *prog.Prog
+	Prog  *prog.Prog
 	Cover []uint64
 }
 
@@ -33,8 +33,6 @@ func (t Traces) Less(i, j int) bool {
 func (t *Traces) Add(trace *Trace) {
 	*t = append(*t, trace)
 }
-
-
 
 func (d *TraceDistiller) traces(progs []*prog.Prog) Traces {
 	traces := make(Traces, 0)
@@ -72,7 +70,7 @@ func (d *TraceDistiller) Add(seeds Seeds) {
 		d.CallToSeed[seed.Call] = seed
 		d.UpstreamDependencyGraph[seed] = make(map[int]map[prog.Arg][]prog.Arg, 0)
 		seed.ArgMeta = make(map[prog.Arg]bool, 0)
-		for call,idx := range seed.DependsOn {
+		for call, idx := range seed.DependsOn {
 			if _, ok := d.UpstreamDependencyGraph[seed][idx]; !ok {
 				d.UpstreamDependencyGraph[seed][idx] = make(map[prog.Arg][]prog.Arg, 0)
 			}

@@ -1,17 +1,17 @@
-package tracker
+package trace2syz
 
 import (
 	"fmt"
-	. "github.com/google/syzkaller/prog"
+	"github.com/google/syzkaller/prog"
 )
 
 const (
 	memAllocMaxMem = 16 << 20
 )
 
-type Allocation struct {
-	num_bytes uint64
-	arg       Arg
+type allocation struct {
+	numBytes uint64
+	arg      prog.Arg
 }
 
 /*
@@ -23,12 +23,12 @@ that take a list of pages as arguments.
 */
 type MemDependency struct {
 	Callidx int
-	arg     Arg
+	arg     prog.Arg
 	start   uint64
 	end     uint64
 }
 
-func NewMemDependency(callidx int, usedBy Arg, start uint64, end uint64) *MemDependency {
+func newMemDependency(callidx int, usedBy prog.Arg, start uint64, end uint64) *MemDependency {
 	return &MemDependency{
 		Callidx: callidx,
 		arg:     usedBy,
@@ -39,7 +39,7 @@ func NewMemDependency(callidx int, usedBy Arg, start uint64, end uint64) *MemDep
 
 type VirtualMapping struct {
 	usedBy    []*MemDependency
-	createdBy *Call
+	createdBy *prog.Call
 	callidx   int
 	start     uint64
 	end       uint64
@@ -48,39 +48,38 @@ type VirtualMapping struct {
 type ShmRequest struct {
 	size  uint64
 	shmid uint64
-	call  *Call
 }
 
-func (s *ShmRequest) GetSize() uint64 {
+func (s *ShmRequest) getSize() uint64 {
 	return s.size
 }
 
-func (vm *VirtualMapping) GetUsedBy() []*MemDependency {
+func (vm *VirtualMapping) getUsedBy() []*MemDependency {
 	return vm.usedBy
 }
 
-func (vm *VirtualMapping) AddDependency(md *MemDependency) {
+func (vm *VirtualMapping) addDependency(md *MemDependency) {
 	vm.usedBy = append(vm.usedBy, md)
 }
 
-func (vm *VirtualMapping) GetEnd() uint64 {
+func (vm *VirtualMapping) getEnd() uint64 {
 	return vm.end
 }
 
-func (vm *VirtualMapping) GetStart() uint64 {
+func (vm *VirtualMapping) getStart() uint64 {
 	return vm.start
 }
 
-func (vm *VirtualMapping) GetCall() *Call {
+func (vm *VirtualMapping) getCall() *prog.Call {
 	return vm.createdBy
 }
 
-func (vm *VirtualMapping) GetCallIdx() int {
+func (vm *VirtualMapping) getCallIdx() int {
 	return vm.callidx
 }
 
 type MemoryTracker struct {
-	allocations map[*Call][]*Allocation
+	allocations map[*prog.Call][]*allocation
 	mappings    []*VirtualMapping
 	/*
 	 We keep the SYSTEM V shared mapping requests because
@@ -90,38 +89,37 @@ type MemoryTracker struct {
 	 when we add the address to our tracker we need to know the size.
 	 Memory tracker seems like a good place to keep the requests
 	*/
-	shm_requests []*ShmRequest
+	shmRequests []*ShmRequest
 }
 
-func NewTracker() *MemoryTracker {
+func newTracker() *MemoryTracker {
 	m := new(MemoryTracker)
-	m.allocations = make(map[*Call][]*Allocation, 0)
+	m.allocations = make(map[*prog.Call][]*allocation)
 	m.mappings = make([]*VirtualMapping, 0)
 	return m
 }
 
-func (m *MemoryTracker) AddShmRequest(call *Call, shmid uint64, size uint64) {
-	shm_request := &ShmRequest{
+func (m *MemoryTracker) addShmRequest(shmid uint64, size uint64) {
+	shmRequest := &ShmRequest{
 		size:  size,
 		shmid: shmid,
-		call:  call,
 	}
-	m.shm_requests = append(m.shm_requests, shm_request)
+	m.shmRequests = append(m.shmRequests, shmRequest)
 }
 
-func (m *MemoryTracker) FindShmRequest(shmid uint64) *ShmRequest {
+func (m *MemoryTracker) findShmRequest(shmid uint64) *ShmRequest {
 	//Get the latest Request associated with id
-	var ret *ShmRequest = nil
-	for _, req := range m.shm_requests {
-		var req_ *ShmRequest = req
+	var ret *ShmRequest
+	for _, req := range m.shmRequests {
+		r := req
 		if req.shmid == shmid {
-			ret = req_
+			ret = r
 		}
 	}
 	return ret
 }
 
-func (m *MemoryTracker) CreateMapping(call *Call, callidx int, arg Arg, start uint64, end uint64) {
+func (m *MemoryTracker) createMapping(call *prog.Call, callidx int, arg prog.Arg, start uint64, end uint64) {
 
 	mapping := &VirtualMapping{
 		createdBy: call,
@@ -134,24 +132,8 @@ func (m *MemoryTracker) CreateMapping(call *Call, callidx int, arg Arg, start ui
 	m.mappings = append(m.mappings, mapping)
 }
 
-func (m *MemoryTracker) Mappings(start uint64, end uint64) []*VirtualMapping {
-	/*
-		Get all mappings whose totality encompasses start and end.
-	*/
-	maps := make([]*VirtualMapping, 0)
-
-	for _, mapping := range m.mappings {
-		if mapping.start < start && mapping.end >= start {
-			maps = append(maps, mapping)
-		} else if mapping.start <= end && mapping.end >= end {
-			maps = append(maps, mapping)
-		}
-	}
-	return maps
-}
-
-func (m *MemoryTracker) FindLatestOverlappingVMA(start uint64) *VirtualMapping {
-	var ret *VirtualMapping = nil
+func (m *MemoryTracker) findLatestOverlappingVMA(start uint64) *VirtualMapping {
+	var ret *VirtualMapping
 	for _, mapping := range m.mappings {
 		mapCopy := mapping
 
@@ -162,31 +144,22 @@ func (m *MemoryTracker) FindLatestOverlappingVMA(start uint64) *VirtualMapping {
 	return ret
 }
 
-func (m *MemoryTracker) AddAllocation(call *Call, size uint64, arg Arg) {
+func (m *MemoryTracker) addAllocation(call *prog.Call, size uint64, arg prog.Arg) {
 	switch arg.(type) {
-	case *PointerArg:
+	case *prog.PointerArg:
 	default:
 		panic("Adding allocation for non pointer")
 	}
-	allocation := new(Allocation)
-	allocation.arg = arg
-	allocation.num_bytes = size
+	alloc := new(allocation)
+	alloc.arg = arg
+	alloc.numBytes = size
 	if _, ok := m.allocations[call]; !ok {
-		m.allocations[call] = make([]*Allocation, 0)
+		m.allocations[call] = make([]*allocation, 0)
 	}
-	m.allocations[call] = append(m.allocations[call], allocation)
+	m.allocations[call] = append(m.allocations[call], alloc)
 }
 
-func (m *MemoryTracker) TrackDependency(arg Arg, start uint64, end uint64, mapping *VirtualMapping) {
-	dependency := &MemDependency{
-		arg:   arg,
-		start: start,
-		end:   end,
-	}
-	mapping.usedBy = append(mapping.usedBy, dependency)
-}
-
-func (m *MemoryTracker) FillOutMemory(prog *Prog) (err error) {
+func (m *MemoryTracker) fillOutMemory(prog *prog.Prog) (err error) {
 	var offset uint64
 	if offset, err = m.fillOutPtrArgs(prog); err != nil {
 		return
@@ -196,25 +169,25 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) (err error) {
 		offset = (offset/PageSize + 1) * PageSize
 	}
 
-	if err = m.fillOutMmaps(prog, offset); err != nil {
+	if err = m.fillOutMmaps(offset); err != nil {
 		return
 	}
 	return nil
 }
 
-func (m *MemoryTracker) fillOutPtrArgs(prog *Prog) (uint64, error) {
+func (m *MemoryTracker) fillOutPtrArgs(p *prog.Prog) (uint64, error) {
 	offset := uint64(0)
 
-	for _, call := range prog.Calls {
+	for _, call := range p.Calls {
 		if _, ok := m.allocations[call]; !ok {
 			continue
 		}
 		i := 0
 		for _, a := range m.allocations[call] {
 			switch arg := a.arg.(type) {
-			case *PointerArg:
+			case *prog.PointerArg:
 				arg.Address = offset
-				offset += a.num_bytes
+				offset += a.numBytes
 				i++
 				if arg.Address >= memAllocMaxMem {
 					return 0, fmt.Errorf("Unable to allocate space to store arg: %#v"+
@@ -235,57 +208,45 @@ func (m *MemoryTracker) fillOutPtrArgs(prog *Prog) (uint64, error) {
 	return offset, nil
 }
 
-func (m *MemoryTracker) fillOutMmaps(prog *Prog, offset uint64) error {
+func (m *MemoryTracker) fillOutMmaps(offset uint64) error {
 	for _, mapping := range m.mappings {
 		for _, dep := range mapping.usedBy {
-			switch arg_ := dep.arg.(type) {
-			case *PointerArg:
+			switch arg := dep.arg.(type) {
+			case *prog.PointerArg:
 				//Offset should align with the start of a mapping/end of previous mapping.
-				arg_.Address = offset + dep.start - mapping.start
+				arg.Address = offset + dep.start - mapping.start
 
-				arg_.Res = nil
-				if arg_.Address >= memAllocMaxMem || arg_.Address+arg_.VmaSize > memAllocMaxMem {
+				arg.Res = nil
+				if arg.Address >= memAllocMaxMem || arg.Address+arg.VmaSize > memAllocMaxMem {
 					return fmt.Errorf("Unable to allocate space for vma Call: %#v "+
 						"Required memory is larger than what is allowed by Syzkaller."+
 						"Offending address: %d. Skipping seed generation for this prog...\n",
-						mapping.GetCall(), arg_.Address)
+						mapping.getCall(), arg.Address)
 				}
 			default:
 				panic("Mapping needs to be Pointer Arg")
 			}
 		}
-		offset += mapping.GetEnd() - mapping.GetStart()
+		offset += mapping.getEnd() - mapping.getStart()
 	}
 	return nil
 }
 
-func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64 {
+//getTotalMemoryAllocations calculates the total amount of memory needed by all the arguments
+//of every system call. Currently we are allocating memory in a naive fashion by providing
+//a new memory region for every every argument. However, this can be significantly improved
+func (m *MemoryTracker) getTotalMemoryAllocations(p *prog.Prog) uint64 {
 	sum := uint64(0)
-	for _, call := range prog.Calls {
+	for _, call := range p.Calls {
 		if _, ok := m.allocations[call]; !ok {
 			continue
 		}
 		for _, a := range m.allocations[call] {
-			sum += a.num_bytes
+			sum += a.numBytes
 		}
 	}
 	if sum%PageSize > 0 {
 		sum = (sum/PageSize + 1) * PageSize
-	}
-	return sum
-}
-
-func (m *MemoryTracker) GetTotalVMAAllocations(prog *Prog) uint64 {
-	sum := uint64(0)
-	callMap := make(map[*Call]bool, 0)
-	for _, call := range prog.Calls {
-		callMap[call] = true
-	}
-
-	for _, mapping := range m.mappings {
-		if _, ok := callMap[mapping.createdBy]; ok {
-			sum += (mapping.end - mapping.start)
-		}
 	}
 	return sum
 }

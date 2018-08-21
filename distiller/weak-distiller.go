@@ -1,22 +1,22 @@
 package distiller
 
 import (
-	"github.com/google/syzkaller/prog"
 	"fmt"
-	"sort"
+	"github.com/google/syzkaller/prog"
 	"os"
+	"sort"
 )
 
 const (
 	pageSize = 4 << 10
 )
+
 var (
 	RADIUS int = 2
-
 )
 
 type WeakDistiller struct {
-	*DistillerMetadata
+	*Metadata
 }
 
 func (d *WeakDistiller) Add(seeds Seeds) {
@@ -36,7 +36,6 @@ func (d *WeakDistiller) Add(seeds Seeds) {
 	}
 }
 
-
 func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	seenIps := make(map[uint64]bool)
 	seeds := d.Seeds
@@ -45,10 +44,10 @@ func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 	contributing_progs := 0
 	heavyHitters := make(Seeds, 0)
 	for _, prog := range progs {
-		d.TrackDependencies(prog)
+		d.trackDependencies(prog)
 	}
 	for _, seed := range seeds {
-		var ips int = d.Contributes(seed, seenIps)
+		var ips int = d.contributes(seed, seenIps)
 		if ips > 0 {
 			heavyHitters.Add(seed)
 			fmt.Printf("Seed: %s contributes: %d ips out of its total of: %d\n", seed.Call.Meta.Name, ips, len(seed.Cover))
@@ -70,7 +69,7 @@ func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 		state := seed.State
 		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
 			fmt.Printf("Error: %s\n", err.Error())
-            continue
+			continue
 		}
 		totalMemory := state.Tracker.GetTotalMemoryAllocations(prog_)
 		mmapCall := state.Target.MakeMmap(0, uint64(totalMemory/pageSize)+1)
@@ -90,7 +89,7 @@ func (d *WeakDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog) {
 func (d *WeakDistiller) AddToDistilledProg(seed *Seed) {
 	distilledProg := new(prog.Prog)
 	distilledProg.Calls = make([]*prog.Call, 0)
-	callIndexes := make([]int, 0)
+	var callIndexes []int
 
 	if d.CallToDistilledProg[seed.Call] != nil {
 		return
@@ -104,7 +103,7 @@ func (d *WeakDistiller) AddToDistilledProg(seed *Seed) {
 		d.CallToDistilledProg[call] = distilledProg
 		distilledProg.Calls = append(distilledProg.Calls, call)
 	}
-	d.BuildDependency(seed, distilledProg)
+	d.buildDependency(seed, distilledProg)
 }
 
 func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
@@ -120,7 +119,7 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 			break
 		} else {
 			lowIdx := seed.CallIdx - i
-			if seed.CallIdx - i < 0 {
+			if seed.CallIdx-i < 0 {
 				foundLowerNeighbors = true
 			} else {
 				c := seed.Prog.Calls[lowIdx]
@@ -138,7 +137,8 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 				}
 			}
 		}
-		i++; j++
+		i++
+		j++
 	}
 	seedCalls := append(upperNeighbors, lowerNeighbors...)
 	seedCalls = append(seedCalls, seed.Call)
@@ -149,34 +149,34 @@ func (d *WeakDistiller) GetNeighbors(seed *Seed) []*prog.Call {
 This is the core of the weak distiller. We start with the centroid and get all downstream dependents.
 Every call needs its upstream dependents to run correctly so we get those. We then pull all downstream dependents of
 those upstreams and if there are any new calls, we pull the upstream of them. We can keep going, but this is a heuristic
- */
+*/
 func (d *WeakDistiller) GetDependents(seedCalls []*prog.Call) []*prog.Call {
 	seenMap := make(map[int]bool, 0)
 	upstreamCalls := make([]*prog.Call, 0)
 	downstreamCalls := make([]*prog.Call, 0)
-	totalCalls := make([]*prog.Call, 0)
+	var totalCalls []*prog.Call
 
 	//Get downstream dependents of our centroid
 	for _, call := range seedCalls {
-		downstreamCalls = append(downstreamCalls, d.GetAllDownstreamDependents(d.CallToSeed[call], seenMap)...)
+		downstreamCalls = append(downstreamCalls, d.getAllDownstreamDependents(d.CallToSeed[call], seenMap)...)
 	}
 	downstreamCalls = append(downstreamCalls, seedCalls...)
 	//Get all upstream dependent calls for our downstream ones
 	for _, dcall := range downstreamCalls {
 		if dseed, ok := d.CallToSeed[dcall]; ok {
-			upstreamCalls = append(upstreamCalls, d.GetAllUpstreamDependents(dseed, seenMap)...)
+			upstreamCalls = append(upstreamCalls, d.getAllUpstreamDependents(dseed, seenMap)...)
 		}
 	}
 	moreCalls := make([]*prog.Call, 0)
 	//Get downstream calls for our upstream ones
 	for _, dcall := range upstreamCalls {
 		if dseed, ok := d.CallToSeed[dcall]; ok {
-			moreCalls = append(moreCalls, d.GetAllDownstreamDependents(dseed, seenMap)...)
+			moreCalls = append(moreCalls, d.getAllDownstreamDependents(dseed, seenMap)...)
 		}
 	}
 	//Get all upstream dependencies so our program behaves correctly
 	for _, dcall := range moreCalls {
-		moreCalls = append(moreCalls, d.GetAllUpstreamDependents(d.CallToSeed[dcall], seenMap)...)
+		moreCalls = append(moreCalls, d.getAllUpstreamDependents(d.CallToSeed[dcall], seenMap)...)
 	}
 
 	connectedCalls := append(upstreamCalls, downstreamCalls...)

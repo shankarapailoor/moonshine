@@ -24,7 +24,6 @@ import (
 // Note: the current implementation is very basic, there is no theory behind any
 // constants.
 
-
 func (target *Target) CalculatePriorities(corpus []*Prog) [][]float32 {
 	static := target.calcStaticPriorities()
 	dynamic := target.calcDynamicPrio(corpus)
@@ -34,7 +33,6 @@ func (target *Target) CalculatePriorities(corpus []*Prog) [][]float32 {
 		}
 	}
 	return dynamic
-  return static
 }
 
 func (target *Target) calcStaticPriorities() [][]float32 {
@@ -197,7 +195,6 @@ type ChoiceTable struct {
 	enabled      map[*Syscall]bool
 }
 
-
 func (target *Target) BuildChoiceTable(prios [][]float32, enabled map[*Syscall]bool) *ChoiceTable {
 	if enabled == nil {
 		enabled = make(map[*Syscall]bool)
@@ -239,7 +236,7 @@ func (ct *ChoiceTable) Choose(r *rand.Rand, call int) int {
 		return ct.enabledCalls[r.Intn(len(ct.enabledCalls))].ID
 	}
 	run := ct.run[call] // get array of prios for that specific call
-	if run == nil { // return random call, no prio info to judge
+	if run == nil {     // return random call, no prio info to judge
 		return ct.enabledCalls[r.Intn(len(ct.enabledCalls))].ID
 	}
 	for {

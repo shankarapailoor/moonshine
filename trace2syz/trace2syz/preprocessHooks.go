@@ -1,22 +1,20 @@
-package parser
+package trace2syz
 
 import (
 	"github.com/google/syzkaller/prog"
-	. "github.com/shankarapailoor/moonshine/logging"
-	"github.com/shankarapailoor/moonshine/straceTypes"
+	"github.com/shankarapailoor/moonshine/logging"
 )
 
-type PreprocessHook func(ctx *Context)
+type preprocessHook func(ctx *Context)
 
-func Preprocess(ctx *Context) {
+func preprocess(ctx *Context) {
 	call := ctx.CurrentStraceCall.CallName
-	if procFunc, ok := PreprocessMap[call]; ok {
+	if procFunc, ok := preprocessMap[call]; ok {
 		procFunc(ctx)
 	}
-	return
 }
 
-var PreprocessMap = map[string]PreprocessHook{
+var preprocessMap = map[string]preprocessHook{
 	"bpf":         bpf,
 	"accept":      accept,
 	"accept4":     accept,
@@ -36,11 +34,12 @@ var PreprocessMap = map[string]PreprocessHook{
 	"setsockopt":  setsockopt,
 	"shmctl":      shmctl,
 	"socket":      socket,
+	"shmget":      shmget,
 }
 
 func bpf(ctx *Context) {
 	bpfCmd := ctx.CurrentStraceCall.Args[0].String()
-	if suffix, ok := straceTypes.BpfLabels[bpfCmd]; ok {
+	if suffix, ok := bpfLabels[bpfCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+bpfCmd]; ok {
 		ctx.CurrentStraceCall.CallName += "$" + bpfCmd
@@ -60,10 +59,10 @@ func accept(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0] //File descriptor of Accept
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.AcceptLabels[a.TypeName]; suffix != "" {
+			if suffix = acceptLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -75,10 +74,10 @@ func bind(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.BindLabels[a.TypeName]; suffix != "" {
+			if suffix = bindLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -90,10 +89,10 @@ func connect(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.ConnectLabels[a.TypeName]; suffix != "" {
+			if suffix = connectLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -105,10 +104,10 @@ func getsockname(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.GetsocknameLabels[a.TypeName]; suffix != "" {
+			if suffix = getsocknameLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -119,7 +118,7 @@ func getsockname(ctx *Context) {
 func socket(ctx *Context) {
 	straceFd := ctx.CurrentStraceCall.Args[0]
 
-	if suffix, ok := straceTypes.SocketLabels[straceFd.String()]; ok {
+	if suffix, ok := socketLabels[straceFd.String()]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 		ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 	}
@@ -128,11 +127,11 @@ func socket(ctx *Context) {
 func setsockopt(ctx *Context) {
 	sockLevel := ctx.CurrentStraceCall.Args[1]
 	optName := ctx.CurrentStraceCall.Args[2]
-	pair := straceTypes.Pair{
+	pair := pair{
 		A: sockLevel.String(),
 		B: optName.String(),
 	}
-	if suffix, ok := straceTypes.SetsockoptLabels[pair]; ok {
+	if suffix, ok := setsockoptLabels[pair]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 		ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 	}
@@ -142,11 +141,11 @@ func setsockopt(ctx *Context) {
 func getsockopt(ctx *Context) {
 	sockLevel := ctx.CurrentStraceCall.Args[1]
 	optName := ctx.CurrentStraceCall.Args[2]
-	pair := straceTypes.Pair{
+	pair := pair{
 		A: sockLevel.String(),
 		B: optName.String(),
 	}
-	if suffix, ok := straceTypes.GetsockoptLabels[pair]; ok {
+	if suffix, ok := getsockoptLabels[pair]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 		ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 	}
@@ -157,10 +156,10 @@ func recvfrom(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0]
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.RecvfromLabels[a.TypeName]; suffix != "" {
+			if suffix = recvfromLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -171,27 +170,27 @@ func recvfrom(ctx *Context) {
 func open(ctx *Context) {
 	if len(ctx.CurrentStraceCall.Args) < 3 {
 		ctx.CurrentStraceCall.Args = append(ctx.CurrentStraceCall.Args,
-			straceTypes.NewExpression(straceTypes.NewIntType(int64(0))))
+			newExpression(newIntType(int64(0))))
 	}
 }
 
 func mknod(ctx *Context) {
 	if len(ctx.CurrentStraceCall.Args) < 3 {
 		ctx.CurrentStraceCall.Args = append(ctx.CurrentStraceCall.Args,
-			straceTypes.NewExpression(straceTypes.NewIntType(int64(0))))
+			newExpression(newIntType(int64(0))))
 	}
 }
 
 func openat(ctx *Context) {
 	if len(ctx.CurrentSyzCall.Args) < 4 {
 		ctx.CurrentStraceCall.Args = append(ctx.CurrentStraceCall.Args,
-			straceTypes.NewExpression(straceTypes.NewIntType(int64(0))))
+			newExpression(newIntType(int64(0))))
 	}
 }
 
 func ioctl(ctx *Context) {
 	ioctlCmd := ctx.CurrentStraceCall.Args[1].String()
-	if suffix, ok := straceTypes.IoctlMap[ioctlCmd]; ok {
+	if suffix, ok := ioctlMap[ioctlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+ioctlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += "$" + ioctlCmd
@@ -201,7 +200,7 @@ func ioctl(ctx *Context) {
 
 func fcntl(ctx *Context) {
 	fcntlCmd := ctx.CurrentStraceCall.Args[1].String()
-	if suffix, ok := straceTypes.FcntlLabels[fcntlCmd]; ok {
+	if suffix, ok := fcntlLabels[fcntlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += suffix
 	} else if _, ok := ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName+"$"+fcntlCmd]; ok {
 		ctx.CurrentStraceCall.CallName += "$" + fcntlCmd
@@ -229,10 +228,10 @@ func sendto(ctx *Context) {
 	suffix := ""
 	straceFd := ctx.CurrentStraceCall.Args[0] //File descriptor of Accept
 	syzFd := ctx.CurrentSyzCall.Meta.Args[0]
-	if arg := ctx.Cache.Get(syzFd, straceFd); arg != nil {
+	if arg := ctx.ReturnCache.get(syzFd, straceFd); arg != nil {
 		switch a := arg.Type().(type) {
 		case *prog.ResourceType:
-			if suffix = straceTypes.SendtoLabels[a.TypeName]; suffix != "" {
+			if suffix = sendtoLabels[a.TypeName]; suffix != "" {
 				ctx.CurrentStraceCall.CallName += suffix
 				ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
 			}
@@ -243,7 +242,7 @@ func sendto(ctx *Context) {
 func modifyLdt(ctx *Context) {
 	suffix := ""
 	switch a := ctx.CurrentStraceCall.Args[0].(type) {
-	case *straceTypes.Expression:
+	case *expression:
 		switch a.Eval(ctx.Target) {
 		case 0:
 			suffix = "$read"
@@ -255,8 +254,21 @@ func modifyLdt(ctx *Context) {
 			suffix = "$write2"
 		}
 	default:
-		Failf("Preprocess modifyldt received unexpected strace type: %s\n", a.Name())
+		logging.Failf("Preprocess modifyldt received unexpected strace type: %s\n", a.Name())
 	}
 	ctx.CurrentStraceCall.CallName = ctx.CurrentStraceCall.CallName + suffix
 	ctx.CurrentSyzCall.Meta = ctx.Target.SyscallMap[ctx.CurrentStraceCall.CallName]
+}
+
+func shmget(ctx *Context) {
+	if ctx.CurrentStraceCall.Ret > 0 {
+		//We have a successful shmget
+		switch a := ctx.CurrentStraceCall.Args[1].(type) {
+		case *expression:
+			size := a.Eval(ctx.Target)
+			ctx.State.Tracker.addShmRequest(uint64(ctx.CurrentStraceCall.Ret), size)
+		default:
+			logging.Failf("shmctl could not evaluate size of buffer: %#v\n", a)
+		}
+	}
 }
