@@ -137,6 +137,7 @@ func TestParseLoop1Grandchild(t *testing.T) {
 }
 
 func TestParseLoopIrTypes(t *testing.T) {
+	//This test makes sure that we can parse various strace arguments into their proper ir type
 	data := `open(MAKEDEV(1), {1, field1="\xff\xff", {1, 2, 3}` +
 		`, [1, 2, 3], [1 2], field2=inet_pton("\xff\xff"), NULL, c_cc[VMIN]=1}, TCSETS or TCGETS) = 3`
 	scanner := initialize(data)

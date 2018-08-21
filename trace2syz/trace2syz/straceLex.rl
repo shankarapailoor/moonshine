@@ -6,6 +6,7 @@ import (
     "encoding/hex"
     "strconv"
     "strings"
+    "github.com/google/syzkaller/pkg/log"
 )
 
 %%{
@@ -131,7 +132,7 @@ func ParseString(s string) string{
 	    strippedStr += "0"
 	}
 	if decoded, err = hex.DecodeString(strippedStr); err != nil {
-		fmt.Printf("Failed to decode string: %s, with error: %s\n", s, err.Error())
+		log.Logf(2, "Failed to decode string: %s, with error: %s\n", s, err.Error())
 		decoded = []byte(strippedStr)
 	}
 	decoded = append(decoded, '\x00')

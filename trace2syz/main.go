@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/google/syzkaller/pkg/db"
 	"github.com/google/syzkaller/pkg/hash"
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
 	"github.com/google/syzkaller/sys"
-	"github.com/shankarapailoor/moonshine/logging"
 	"github.com/shankarapailoor/moonshine/trace2syz/trace2syz"
 	"io/ioutil"
 	"os"
@@ -34,7 +34,7 @@ func main() {
 	flag.Parse()
 	target, err := prog.GetTarget(OS, Arch)
 	if err != nil {
-		logging.Failf("error getting target: %v, git revision: %v", err.Error(), rev)
+		log.Fatalf("error getting target: %v, git revision: %v", err.Error(), rev)
 	} else {
 		parseTraces(target)
 		pack("deserialized", "corpus.db")
@@ -58,9 +58,9 @@ func parseTraces(target *prog.Target) []*trace2syz.Context {
 	}
 
 	totalFiles := len(names)
-	fmt.Printf("Total Number of Files: %d\n", totalFiles)
+	log.Logf(1, "Total Number of Files: %d\n", totalFiles)
 	for i, file := range names {
-		fmt.Printf("Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
+		log.Logf(1, "Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
 		tree := trace2syz.Parse(file, traceType)
 		if tree == nil {
 			fmt.Fprintf(os.Stderr, "File: %s is empty\n", path.Base(file))
@@ -83,7 +83,7 @@ func parseTraces(target *prog.Target) []*trace2syz.Context {
 			}
 			progName := "deserialized/" + filepath.Base(file) + strconv.Itoa(i)
 			if err := ioutil.WriteFile(progName, ctx.Prog.Serialize(), 0640); err != nil {
-				logging.Failf("failed to output file: %v", err)
+				log.Fatalf("failed to output file: %v", err)
 			}
 		}
 
@@ -107,7 +107,7 @@ func getTraceFiles(dir string) []string {
 			names = append(names, name)
 		}
 	} else {
-		logging.Failf("Failed to read dir: %s\n", err.Error())
+		log.Fatalf("Failed to read dir: %s\n", err.Error())
 	}
 	return names
 }
@@ -115,8 +115,9 @@ func getTraceFiles(dir string) []string {
 //parseTree groups system calls in the trace by process id.
 //The tree preserves process heirarchy i.e. parent->[]child
 func parseTree(tree *trace2syz.TraceTree, pid int64, target *prog.Target) []*trace2syz.Context {
+	log.Logf(1, "Parsing trace: %s\n", tree.Filename)
 	ctxs := make([]*trace2syz.Context, 0)
-	ctx, err := trace2syz.ParseProg(tree.TraceMap[pid], target)
+	ctx, err := trace2syz.ParseTrace(tree.TraceMap[pid], target)
 	parsedProg := ctx.Prog
 	if err != nil {
 		panic("Failed to parse program")
@@ -141,19 +142,19 @@ func parseTree(tree *trace2syz.TraceTree, pid int64, target *prog.Target) []*tra
 func pack(dir, file string) {
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
-		logging.Failf("failed to read dir: %v", err)
+		log.Fatalf("failed to read dir: %v", err)
 	}
 	os.Remove(file)
 	syzDb, err := db.Open(file)
 	syzDb.BumpVersion(currentDBVersion)
 	if err != nil {
-		logging.Failf("failed to open database file: %v", err)
+		log.Fatalf("failed to open database file: %v", err)
 	}
-	fmt.Println("Deserializing programs => deserialized/")
+	log.Logf(1, "Deserializing programs => deserialized/")
 	for _, file := range files {
 		data, err := ioutil.ReadFile(filepath.Join(dir, file.Name()))
 		if err != nil {
-			logging.Failf("failed to read file %v: %v", file.Name(), err)
+			log.Fatalf("failed to read file %v: %v", file.Name(), err)
 		}
 		var seq uint64
 		key := file.Name()
@@ -170,6 +171,6 @@ func pack(dir, file string) {
 		syzDb.Save(key, data, seq)
 	}
 	if err := syzDb.Flush(); err != nil {
-		logging.Failf("failed to save database file: %v", err)
+		log.Fatalf("failed to save database file: %v", err)
 	}
 }
