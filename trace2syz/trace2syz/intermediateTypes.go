@@ -448,7 +448,7 @@ type ints []*intType
 
 func (f flags) Eval(target *prog.Target) uint64 {
 	if len(f) > 1 {
-		var val uint64 = 0
+		var val uint64
 		for _, flag := range f {
 			val |= flag.Eval(target)
 		}

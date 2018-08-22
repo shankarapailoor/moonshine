@@ -137,7 +137,7 @@ func ParseTrace(trace *Trace, target *prog.Target) (*Context, error) {
 }
 
 func parseCall(ctx *Context) (*prog.Call, error) {
-	log.Logf(1, "parsing call: %s\n", ctx.CurrentStraceCall.CallName)
+	log.Logf(2, "parsing call: %s\n", ctx.CurrentStraceCall.CallName)
 	straceCall := ctx.CurrentStraceCall
 	syzCallDef := ctx.Target.SyscallMap[straceCall.CallName]
 	retCall := new(prog.Call)

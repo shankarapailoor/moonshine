@@ -37,6 +37,7 @@ func main() {
 		log.Fatalf("error getting target: %v, git revision: %v", err.Error(), rev)
 	} else {
 		parseTraces(target)
+		log.Logf(0, "Successfully converted traces. Generating corpus.db\n")
 		pack("deserialized", "corpus.db")
 	}
 }
@@ -58,12 +59,12 @@ func parseTraces(target *prog.Target) []*trace2syz.Context {
 	}
 
 	totalFiles := len(names)
-	log.Logf(1, "Total Number of Files: %d\n", totalFiles)
+	log.Logf(0, "Parsing %d traces\n", totalFiles)
 	for i, file := range names {
 		log.Logf(1, "Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
 		tree := trace2syz.Parse(file, traceType)
 		if tree == nil {
-			fmt.Fprintf(os.Stderr, "File: %s is empty\n", path.Base(file))
+			log.Logf(1, "File: %s is empty\n", path.Base(file))
 			continue
 		}
 		ctxs := parseTree(tree, tree.RootPid, target)
@@ -71,14 +72,14 @@ func parseTraces(target *prog.Target) []*trace2syz.Context {
 		for i, ctx := range ctxs {
 			ctx.Prog.Target = ctx.Target
 			if err := ctx.FillOutMemory(); err != nil {
-				fmt.Fprintln(os.Stderr, "Failed to fill out memory")
+				log.Logf(1, "Failed to fill out memory\n")
 				continue
 			}
 			if err := ctx.Prog.Validate(); err != nil {
 				panic(fmt.Sprintf("Error validating program: %s\n", err.Error()))
 			}
 			if progIsTooLarge(ctx.Prog) {
-				fmt.Fprintln(os.Stderr, "Prog is too large")
+				log.Logf(1, "Prog is too large\n")
 				continue
 			}
 			progName := "deserialized/" + filepath.Base(file) + strconv.Itoa(i)
@@ -113,9 +114,9 @@ func getTraceFiles(dir string) []string {
 }
 
 //parseTree groups system calls in the trace by process id.
-//The tree preserves process heirarchy i.e. parent->[]child
+//The tree preserves process hierarchy i.e. parent->[]child
 func parseTree(tree *trace2syz.TraceTree, pid int64, target *prog.Target) []*trace2syz.Context {
-	log.Logf(1, "Parsing trace: %s\n", tree.Filename)
+	log.Logf(2, "Parsing trace: %s\n", tree.Filename)
 	ctxs := make([]*trace2syz.Context, 0)
 	ctx, err := trace2syz.ParseTrace(tree.TraceMap[pid], target)
 	parsedProg := ctx.Prog
@@ -140,6 +141,7 @@ func parseTree(tree *trace2syz.TraceTree, pid int64, target *prog.Target) []*tra
 }
 
 func pack(dir, file string) {
+	log.Logf(0, "Converted traces...Generating corpus.db")
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		log.Fatalf("failed to read dir: %v", err)
@@ -173,4 +175,5 @@ func pack(dir, file string) {
 	if err := syzDb.Flush(); err != nil {
 		log.Fatalf("failed to save database file: %v", err)
 	}
+	log.Logf(0, "Finished!")
 }
