@@ -238,7 +238,7 @@ arch_prctl(code flags[arch_prctl_code], addr buffer[in])
 seccomp(op flags[seccomp_op], flags flags[seccomp_flags], prog ptr[in, sock_fprog])
 
 resource fd_mq[fd]
-mq_open(name ptr[in, string], flags flags[mq_open_flags], mode flags[open_mode], attr ptr[in, mq_attr]) fd_mq
+mq_open(name ptr[in, string], flags flags[mq_open_flags], mode flags[open_mode], attr ptr[in, mq_attr, opt]) fd_mq
 mq_timedsend(mqd fd_mq, msg buffer[in], msglen len[msg], prio intptr, timeout ptr[in, timespec, opt])
 mq_timedreceive(mqd fd_mq, msg buffer[out], msglen len[msg], prio intptr, timeout ptr[in, timespec, opt])
 mq_notify(mqd fd_mq, notif ptr[in, sigevent])
