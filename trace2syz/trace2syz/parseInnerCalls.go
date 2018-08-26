@@ -86,7 +86,7 @@ func inetAddr(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 		default:
 			optType = unionType.Fields[7]
 		}
-		innerArg = ctx.Target.DefaultArg(optType)
+		innerArg = prog.DefaultArg(optType)
 	default:
 		panic("Parsing inet_addr and inner arg has non ipv4 type")
 	}
@@ -110,7 +110,7 @@ func inetPton(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 		default:
 			optType = unionType.Fields[0]
 		}
-		innerArg = ctx.Target.DefaultArg(optType)
+		innerArg = prog.DefaultArg(optType)
 	default:
 		panic("Parsing inet_addr and inner arg has non ipv4 type")
 	}

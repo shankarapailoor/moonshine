@@ -5,9 +5,18 @@ package prog
 
 import (
 	"fmt"
+	"path/filepath"
 )
 
 var debug = false // enabled in tests
+
+func (p *Prog) debugValidate() {
+	if debug {
+		if err := p.validate(); err != nil {
+			panic(err)
+		}
+	}
+}
 
 type validCtx struct {
 	target *Target
@@ -46,8 +55,8 @@ func (ctx *validCtx) validateCall(c *Call) error {
 		return fmt.Errorf("wrong number of arguments, want %v, got %v",
 			len(c.Meta.Args), len(c.Args))
 	}
-	for _, arg := range c.Args {
-		if err := ctx.validateArg(arg); err != nil {
+	for i, arg := range c.Args {
+		if err := ctx.validateArg(arg, c.Meta.Args[i]); err != nil {
 			return err
 		}
 	}
@@ -64,19 +73,16 @@ func (ctx *validCtx) validateRet(c *Call) error {
 	if c.Ret == nil {
 		return fmt.Errorf("return value is absent")
 	}
-	if c.Ret.Type() != c.Meta.Ret {
-		return fmt.Errorf("wrong return type: %#v vs %#v", c.Ret.Type(), c.Meta.Ret)
-	}
 	if c.Ret.Type().Dir() != DirOut {
 		return fmt.Errorf("return value %v is not output", c.Ret)
 	}
 	if c.Ret.Res != nil || c.Ret.Val != 0 || c.Ret.OpDiv != 0 || c.Ret.OpAdd != 0 {
 		return fmt.Errorf("return value %v is not empty", c.Ret)
 	}
-	return ctx.validateArg(c.Ret)
+	return ctx.validateArg(c.Ret, c.Meta.Ret)
 }
 
-func (ctx *validCtx) validateArg(arg Arg) error {
+func (ctx *validCtx) validateArg(arg Arg, typ Type) error {
 	if arg == nil {
 		return fmt.Errorf("nil arg")
 	}
@@ -86,6 +92,9 @@ func (ctx *validCtx) validateArg(arg Arg) error {
 	if arg.Type() == nil {
 		return fmt.Errorf("no arg type")
 	}
+	if !ctx.target.isAnyPtr(arg.Type()) && arg.Type() != typ {
+		return fmt.Errorf("bad arg type %#v, expect %#v", arg.Type(), typ)
+	}
 	ctx.args[arg] = true
 	return arg.validate(ctx)
 }
@@ -93,20 +102,18 @@ func (ctx *validCtx) validateArg(arg Arg) error {
 func (arg *ConstArg) validate(ctx *validCtx) error {
 	switch typ := arg.Type().(type) {
 	case *IntType:
-		if typ.Dir() == DirOut && (arg.Val != 0 && arg.Val != typ.Default()) {
+		if typ.Dir() == DirOut && !isDefault(arg) {
 			return fmt.Errorf("out int arg '%v' has bad const value %v", typ.Name(), arg.Val)
 		}
 	case *ProcType:
-		if arg.Val >= typ.ValuesPerProc && arg.Val != typ.Default() {
+		if arg.Val >= typ.ValuesPerProc && !isDefault(arg) {
 			return fmt.Errorf("per proc arg '%v' has bad value %v", typ.Name(), arg.Val)
 		}
 	case *CsumType:
 		if arg.Val != 0 {
 			return fmt.Errorf("csum arg '%v' has nonzero value %v", typ.Name(), arg.Val)
 		}
-	case *ConstType:
-	case *FlagsType:
-	case *LenType:
+	case *ConstType, *FlagsType, *LenType:
 	default:
 		return fmt.Errorf("const arg %v has bad type %v", arg, typ.Name())
 	}
@@ -114,7 +121,7 @@ func (arg *ConstArg) validate(ctx *validCtx) error {
 		// We generate output len arguments, which makes sense since it can be
 		// a length of a variable-length array which is not known otherwise.
 		if _, isLen := typ.(*LenType); !isLen {
-			if arg.Val != 0 && arg.Val != typ.Default() {
+			if !typ.isDefaultArg(arg) {
 				return fmt.Errorf("output arg '%v'/'%v' has non default value '%+v'",
 					typ.FieldName(), typ.Name(), arg)
 			}
@@ -132,9 +139,12 @@ func (arg *ResultArg) validate(ctx *validCtx) error {
 		if u == nil {
 			return fmt.Errorf("nil reference in uses for arg %+v", arg)
 		}
+		if u.Res != arg {
+			return fmt.Errorf("result arg '%v' has broken uses link to (%+v)", arg, u)
+		}
 		ctx.uses[u] = arg
 	}
-	if typ.Dir() == DirOut && (arg.Val != 0 && arg.Val != typ.Default()) {
+	if typ.Dir() == DirOut && arg.Val != 0 && arg.Val != typ.Default() {
 		return fmt.Errorf("out resource arg '%v' has bad const value %v", typ.Name(), arg.Val)
 	}
 	if arg.Res != nil {
@@ -167,6 +177,16 @@ func (arg *DataArg) validate(ctx *validCtx) error {
 			return fmt.Errorf("string arg '%v' has size %v, which should be %v",
 				typ.Name(), arg.Size(), typ.TypeSize)
 		}
+	case BufferFilename:
+		file := string(arg.data)
+		for len(file) != 0 && file[len(file)-1] == 0 {
+			file = file[:len(file)-1]
+		}
+		file = filepath.Clean(file)
+		if len(file) > 0 && file[0] == '/' ||
+			len(file) > 1 && file[0] == '.' && file[1] == '.' {
+			return fmt.Errorf("sandbox escaping file name %q", string(arg.data))
+		}
 	}
 	return nil
 }
@@ -178,19 +198,24 @@ func (arg *GroupArg) validate(ctx *validCtx) error {
 			return fmt.Errorf("struct arg '%v' has wrong number of fields: want %v, got %v",
 				typ.Name(), len(typ.Fields), len(arg.Inner))
 		}
+		for i, field := range arg.Inner {
+			if err := ctx.validateArg(field, typ.Fields[i]); err != nil {
+				return err
+			}
+		}
 	case *ArrayType:
 		if typ.Kind == ArrayRangeLen && typ.RangeBegin == typ.RangeEnd &&
 			uint64(len(arg.Inner)) != typ.RangeBegin {
 			return fmt.Errorf("array %v has wrong number of elements %v, want %v",
 				typ.Name(), len(arg.Inner), typ.RangeBegin)
 		}
+		for _, elem := range arg.Inner {
+			if err := ctx.validateArg(elem, typ.Type); err != nil {
+				return err
+			}
+		}
 	default:
 		return fmt.Errorf("group arg %v has bad type %v", arg, typ.Name())
-	}
-	for _, arg1 := range arg.Inner {
-		if err := ctx.validateArg(arg1); err != nil {
-			return err
-		}
 	}
 	return nil
 }
@@ -200,43 +225,31 @@ func (arg *UnionArg) validate(ctx *validCtx) error {
 	if !ok {
 		return fmt.Errorf("union arg %v has bad type %v", arg, arg.Type().Name())
 	}
-	found := false
+	var optType Type
 	for _, typ1 := range typ.Fields {
-		if arg.Option.Type().Name() == typ1.Name() {
-			found = true
+		if arg.Option.Type().FieldName() == typ1.FieldName() {
+			optType = typ1
 			break
 		}
 	}
-	if !found {
+	if optType == nil {
 		return fmt.Errorf("union arg '%v' has bad option", typ.Name())
 	}
-	return ctx.validateArg(arg.Option)
+	return ctx.validateArg(arg.Option, optType)
 }
 
 func (arg *PointerArg) validate(ctx *validCtx) error {
-	maxMem := ctx.target.NumPages * ctx.target.PageSize
-	size := arg.VmaSize
-	if size == 0 && arg.Res != nil {
-		size = arg.Res.Size()
-	}
-	if arg.Address >= maxMem || arg.Address+size > maxMem {
-		return fmt.Errorf("ptr %v has bad address %v/%v/%v",
-			arg.Type().Name(), arg.Address, arg.VmaSize, size)
-	}
 	switch typ := arg.Type().(type) {
 	case *VmaType:
 		if arg.Res != nil {
 			return fmt.Errorf("vma arg '%v' has data", typ.Name())
-		}
-		if arg.VmaSize == 0 && typ.Dir() != DirOut && !typ.Optional() {
-			return fmt.Errorf("vma arg '%v' has size 0", typ.Name())
 		}
 	case *PtrType:
 		if arg.Res == nil && !arg.Type().Optional() {
 			return fmt.Errorf("non optional pointer arg '%v' is nil", typ.Name())
 		}
 		if arg.Res != nil {
-			if err := ctx.validateArg(arg.Res); err != nil {
+			if err := ctx.validateArg(arg.Res, typ.Type); err != nil {
 				return err
 			}
 		}
@@ -248,6 +261,15 @@ func (arg *PointerArg) validate(ctx *validCtx) error {
 		}
 	default:
 		return fmt.Errorf("ptr arg %v has bad type %v", arg, typ.Name())
+	}
+	maxMem := ctx.target.NumPages * ctx.target.PageSize
+	size := arg.VmaSize
+	if size == 0 && arg.Res != nil {
+		size = arg.Res.Size()
+	}
+	if arg.Address >= maxMem || arg.Address+size > maxMem {
+		return fmt.Errorf("ptr %v has bad address %v/%v/%v",
+			arg.Type().Name(), arg.Address, arg.VmaSize, size)
 	}
 	return nil
 }

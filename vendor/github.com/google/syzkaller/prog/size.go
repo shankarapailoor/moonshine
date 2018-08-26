@@ -33,7 +33,6 @@ func (target *Target) generateSize(arg Arg, lenType *LenType) uint64 {
 	}
 }
 
-
 func (target *Target) assignSizes(args []Arg, parentsMap map[Arg]Arg) {
 	// Create a map from field names to args.
 	argsMap := make(map[string]Arg)
@@ -116,7 +115,7 @@ func (target *Target) assignSizesArray(args []Arg) {
 }
 
 func (target *Target) AssignSizesCall(c *Call) {
-	target.assignSizesCall(c)
+	target.assignSizesArray(c.Args)
 }
 
 func (target *Target) assignSizesCall(c *Call) {

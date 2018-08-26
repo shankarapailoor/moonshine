@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"path/filepath"
 	"strings"
 
 	"github.com/google/syzkaller/pkg/ifuzz"
@@ -168,7 +169,7 @@ func (r *randGen) filename(s *state, typ *BufferType) string {
 	return fn
 }
 
-var specialFiles = []string{"", "/", "."}
+var specialFiles = []string{"", "."}
 
 func (r *randGen) filenameImpl(s *state) string {
 	if r.oneOf(100) {
@@ -185,6 +186,9 @@ func (r *randGen) filenameImpl(s *state) string {
 			dir = files[r.Intn(len(files))]
 			if len(dir) > 0 && dir[len(dir)-1] == 0 {
 				dir = dir[:len(dir)-1]
+			}
+			if r.oneOf(10) && filepath.Clean(dir)[0] != '.' {
+				dir += "/.."
 			}
 		}
 		for i := 0; ; i++ {
@@ -279,7 +283,7 @@ func (r *randGen) createResource(s *state, res *ResourceType) (arg Arg, calls []
 		metas = append(metas, meta) // append metas if ct has prio array
 	}
 	if len(metas) == 0 {
-		return MakeResultArg(res, nil, res.Default()), nil
+		return res.makeDefaultArg(), nil
 	}
 
 	// Now we have a set of candidate calls that can create the necessary resource.
@@ -470,7 +474,6 @@ func (r *randGen) generateArgs(s *state, types []Type) ([]Arg, []*Call) {
 
 	args := make([]Arg, len(types)) // need to convert []Types into []*Args
 
-
 	// Generate all args. Size args have the default value 0 for now.
 	for i, typ := range types {
 		// generate args randomly, pass in the type you want the call to return
@@ -498,12 +501,16 @@ func (r *randGen) generateArgImpl(s *state, typ Type, ignoreSpecial bool) (arg A
 		switch typ.(type) {
 		case *IntType, *FlagsType, *ConstType, *ProcType,
 			*VmaType, *ResourceType:
-			return r.target.defaultArg(typ), nil
+			return typ.makeDefaultArg(), nil
 		}
 	}
 
 	if typ.Optional() && r.oneOf(5) {
-		return r.target.defaultArg(typ), nil
+		if res, ok := typ.(*ResourceType); ok {
+			v := res.Desc.Values[r.Intn(len(res.Desc.Values))]
+			return MakeResultArg(typ, nil, v), nil
+		}
+		return typ.makeDefaultArg(), nil
 	}
 
 	// Allow infinite recursion for optional pointers.
@@ -688,6 +695,6 @@ func (a *LenType) generate(r *randGen, s *state) (arg Arg, calls []*Call) {
 }
 
 func (a *CsumType) generate(r *randGen, s *state) (arg Arg, calls []*Call) {
-	// Updated later in calcChecksumsCall.
+	// Filled at runtime by executor.
 	return MakeConstArg(a, 0), nil
 }

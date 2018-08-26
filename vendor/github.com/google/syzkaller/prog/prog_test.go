@@ -5,6 +5,7 @@ package prog
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -23,8 +24,8 @@ func TestDefault(t *testing.T) {
 	target, _, _ := initTest(t)
 	for _, meta := range target.Syscalls {
 		ForeachType(meta, func(typ Type) {
-			arg := target.defaultArg(typ)
-			if !target.isDefaultArg(arg) {
+			arg := typ.makeDefaultArg()
+			if !isDefault(arg) {
 				t.Errorf("default arg is not default: %s\ntype: %#v\narg: %#v",
 					typ, typ, arg)
 			}
@@ -71,14 +72,14 @@ func TestSerialize(t *testing.T) {
 
 func TestVmaType(t *testing.T) {
 	target, rs, iters := initRandomTargetTest(t, "test", "64")
-	meta := target.SyscallMap["syz_test$vma0"]
+	meta := target.SyscallMap["test$vma0"]
 	r := newRand(target, rs)
 	pageSize := target.PageSize
 	for i := 0; i < iters; i++ {
 		s := newState(target, nil)
 		calls := r.generateParticularCall(s, meta)
 		c := calls[len(calls)-1]
-		if c.Meta.Name != "syz_test$vma0" {
+		if c.Meta.Name != "test$vma0" {
 			t.Fatalf("generated wrong call %v", c.Meta.Name)
 		}
 		if len(c.Args) != 6 {
@@ -209,4 +210,190 @@ func TestSpecialStructs(t *testing.T) {
 			})
 		}
 	})
+}
+
+func TestEscapingPaths(t *testing.T) {
+	paths := map[string]bool{
+		"/":                      true,
+		"/\x00":                  true,
+		"/file/..":               true,
+		"/file/../..":            true,
+		"./..":                   true,
+		"..":                     true,
+		"file/../../file":        true,
+		"../file":                true,
+		"./file/../../file/file": true,
+		"":          false,
+		".":         false,
+		"file":      false,
+		"./file":    false,
+		"./file/..": false,
+	}
+	target, err := GetTarget("test", "64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, escaping := range paths {
+		text := fmt.Sprintf("mutate5(&(0x7f0000000000)=\"%s\", 0x0)", hex.EncodeToString([]byte(path)))
+		_, err := target.Deserialize([]byte(text))
+		if !escaping && err != nil {
+			t.Errorf("path %q is detected as escaping (%v)", path, err)
+		}
+		if escaping && (err == nil || !strings.Contains(err.Error(), "sandbox escaping file")) {
+			t.Errorf("path %q is not detected as escaping (%v)", path, err)
+		}
+	}
+}
+
+func TestFallbackSignal(t *testing.T) {
+	type desc struct {
+		prog string
+		info []CallInfo
+	}
+	tests := []desc{
+		// Test restored errno values and that non-executed syscalls don't get fallback signal.
+		{
+			`
+fallback$0()
+fallback$0()
+fallback$0()
+`,
+			[]CallInfo{
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  42,
+					Signal: make([]uint32, 1),
+				},
+				{},
+			},
+		},
+		// Test different cases of argument-dependent signal and that unsuccessful calls don't get it.
+		{
+			`
+r0 = fallback$0()
+fallback$1(r0)
+fallback$1(r0)
+fallback$1(0xffffffffffffffff)
+fallback$1(0x0)
+fallback$1(0x0)
+`,
+			[]CallInfo{
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  1,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 2),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 2),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  2,
+					Signal: make([]uint32, 1),
+				},
+			},
+		},
+		// Test that calls get no signal after a successful seccomp.
+		{
+			`
+fallback$0()
+fallback$0()
+seccomp()
+fallback$0()
+seccomp()
+fallback$0()
+fallback$0()
+`,
+			[]CallInfo{
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  1,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags:  CallExecuted,
+					Errno:  0,
+					Signal: make([]uint32, 1),
+				},
+				{
+					Flags: CallExecuted,
+				},
+				{
+					Flags: CallExecuted,
+				},
+			},
+		},
+	}
+	target, err := GetTarget("test", "64")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, test := range tests {
+		t.Run(fmt.Sprint(i), func(t *testing.T) {
+			p, err := target.Deserialize([]byte(test.prog))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(p.Calls) != len(test.info) {
+				t.Fatalf("call=%v info=%v", len(p.Calls), len(test.info))
+			}
+			wantSignal := make([]int, len(test.info))
+			for i := range test.info {
+				wantSignal[i] = len(test.info[i].Signal)
+				test.info[i].Signal = nil
+			}
+			p.FallbackSignal(test.info)
+			for i := range test.info {
+				if len(test.info[i].Signal) != wantSignal[i] {
+					t.Errorf("call %v: signal=%v want=%v", i, len(test.info[i].Signal), wantSignal[i])
+				}
+				for _, sig := range test.info[i].Signal {
+					call, errno := DecodeFallbackSignal(sig)
+					if call != p.Calls[i].Meta.ID {
+						t.Errorf("call %v: sig=%x id=%v want=%v", i, sig, call, p.Calls[i].Meta.ID)
+					}
+					if errno != test.info[i].Errno {
+						t.Errorf("call %v: sig=%x errno=%v want=%v", i, sig, errno, test.info[i].Errno)
+					}
+				}
+			}
+		})
+	}
 }

@@ -50,13 +50,13 @@ type File struct {
 	done       chan bool
 }
 
-type OS interface {
+type Extractor interface {
 	prepare(sourcedir string, build bool, arches []string) error
 	prepareArch(arch *Arch) error
 	processFile(arch *Arch, info *compiler.ConstInfo) (map[string]uint64, map[string]bool, error)
 }
 
-var oses = map[string]OS{
+var extractors = map[string]Extractor{
 	"akaros":  new(akaros),
 	"linux":   new(linux),
 	"freebsd": new(freebsd),
@@ -76,56 +76,25 @@ func main() {
 		failf("-build and -builddir is an invalid combination")
 	}
 
-	osStr, archArray, files, err := archFileList(*flagOS, *flagArch, flag.Args())
+	OS, archArray, files, err := archFileList(*flagOS, *flagArch, flag.Args())
 	if err != nil {
 		failf("%v", err)
 	}
 
-	OS := oses[osStr]
-	if OS == nil {
-		failf("unknown os: %v", osStr)
+	extractor := extractors[OS]
+	if extractor == nil {
+		failf("unknown os: %v", OS)
 	}
-	if err := OS.prepare(*flagSourceDir, *flagBuild, archArray); err != nil {
+	if err := extractor.prepare(*flagSourceDir, *flagBuild, archArray); err != nil {
 		failf("%v", err)
 	}
 
+	arches, err := createArches(OS, archArray, files)
+	if err != nil {
+		failf("%v", err)
+	}
 	jobC := make(chan interface{}, len(archArray)*len(files))
-
-	var arches []*Arch
-	for _, archStr := range archArray {
-		buildDir := ""
-		if *flagBuild {
-			dir, err := ioutil.TempDir("", "syzkaller-kernel-build")
-			if err != nil {
-				failf("failed to create temp dir: %v", err)
-			}
-			buildDir = dir
-		} else if *flagBuildDir != "" {
-			buildDir = *flagBuildDir
-		} else {
-			buildDir = *flagSourceDir
-		}
-
-		target := targets.List[osStr][archStr]
-		if target == nil {
-			failf("unknown arch: %v", archStr)
-		}
-
-		arch := &Arch{
-			target:    target,
-			sourceDir: *flagSourceDir,
-			buildDir:  buildDir,
-			build:     *flagBuild,
-			done:      make(chan bool),
-		}
-		for _, f := range files {
-			arch.files = append(arch.files, &File{
-				arch: arch,
-				name: f,
-				done: make(chan bool),
-			})
-		}
-		arches = append(arches, arch)
+	for _, arch := range arches {
 		jobC <- arch
 	}
 
@@ -134,7 +103,7 @@ func main() {
 			for job := range jobC {
 				switch j := job.(type) {
 				case *Arch:
-					infos, err := processArch(OS, j)
+					infos, err := processArch(extractor, j)
 					j.err = err
 					close(j.done)
 					if j.err == nil {
@@ -144,7 +113,7 @@ func main() {
 						}
 					}
 				case *File:
-					j.consts, j.undeclared, j.err = processFile(OS, j.arch, j)
+					j.consts, j.undeclared, j.err = processFile(extractor, j.arch, j)
 					close(j.done)
 				}
 			}
@@ -173,28 +142,8 @@ func main() {
 	}
 
 	if !failed {
-		supported := make(map[string]bool)
-		unsupported := make(map[string]string)
-		for _, arch := range arches {
-			for _, f := range arch.files {
-				for name := range f.consts {
-					supported[name] = true
-				}
-				for name := range f.undeclared {
-					unsupported[name] = f.name
-				}
-			}
-		}
-		for name, file := range unsupported {
-			if supported[name] {
-				continue
-			}
-			failed = true
-			fmt.Printf("%v: %v is unsupported on all arches (typo?)\n",
-				file, name)
-		}
+		failed = checkUnsupportedCalls(arches)
 	}
-
 	for _, arch := range arches {
 		if arch.build {
 			os.RemoveAll(arch.buildDir)
@@ -203,6 +152,71 @@ func main() {
 	if failed {
 		os.Exit(1)
 	}
+}
+
+func createArches(OS string, archArray, files []string) ([]*Arch, error) {
+	var arches []*Arch
+	for _, archStr := range archArray {
+		buildDir := ""
+		if *flagBuild {
+			dir, err := ioutil.TempDir("", "syzkaller-kernel-build")
+			if err != nil {
+				return nil, fmt.Errorf("failed to create temp dir: %v", err)
+			}
+			buildDir = dir
+		} else if *flagBuildDir != "" {
+			buildDir = *flagBuildDir
+		} else {
+			buildDir = *flagSourceDir
+		}
+
+		target := targets.Get(OS, archStr)
+		if target == nil {
+			return nil, fmt.Errorf("unknown arch: %v", archStr)
+		}
+
+		arch := &Arch{
+			target:    target,
+			sourceDir: *flagSourceDir,
+			buildDir:  buildDir,
+			build:     *flagBuild,
+			done:      make(chan bool),
+		}
+		for _, f := range files {
+			arch.files = append(arch.files, &File{
+				arch: arch,
+				name: f,
+				done: make(chan bool),
+			})
+		}
+		arches = append(arches, arch)
+	}
+	return arches, nil
+}
+
+func checkUnsupportedCalls(arches []*Arch) bool {
+	supported := make(map[string]bool)
+	unsupported := make(map[string]string)
+	for _, arch := range arches {
+		for _, f := range arch.files {
+			for name := range f.consts {
+				supported[name] = true
+			}
+			for name := range f.undeclared {
+				unsupported[name] = f.name
+			}
+		}
+	}
+	failed := false
+	for name, file := range unsupported {
+		if supported[name] {
+			continue
+		}
+		failed = true
+		fmt.Printf("%v: %v is unsupported on all arches (typo?)\n",
+			file, name)
+	}
+	return failed
 }
 
 func archFileList(os, arch string, files []string) (string, []string, []string, error) {
@@ -246,7 +260,7 @@ func archFileList(os, arch string, files []string) (string, []string, []string, 
 	return os, arches, files, nil
 }
 
-func processArch(OS OS, arch *Arch) (map[string]*compiler.ConstInfo, error) {
+func processArch(extractor Extractor, arch *Arch) (map[string]*compiler.ConstInfo, error) {
 	errBuf := new(bytes.Buffer)
 	eh := func(pos ast.Pos, msg string) {
 		fmt.Fprintf(errBuf, "%v: %v\n", pos, msg)
@@ -259,13 +273,13 @@ func processArch(OS OS, arch *Arch) (map[string]*compiler.ConstInfo, error) {
 	if infos == nil {
 		return nil, fmt.Errorf("%v", errBuf.String())
 	}
-	if err := OS.prepareArch(arch); err != nil {
+	if err := extractor.prepareArch(arch); err != nil {
 		return nil, err
 	}
 	return infos, nil
 }
 
-func processFile(OS OS, arch *Arch, file *File) (map[string]uint64, map[string]bool, error) {
+func processFile(extractor Extractor, arch *Arch, file *File) (map[string]uint64, map[string]bool, error) {
 	inname := filepath.Join("sys", arch.target.OS, file.name)
 	outname := strings.TrimSuffix(inname, ".txt") + "_" + arch.target.Arch + ".const"
 	if file.info == nil {
@@ -275,7 +289,7 @@ func processFile(OS OS, arch *Arch, file *File) (map[string]uint64, map[string]b
 		os.Remove(outname)
 		return nil, nil, nil
 	}
-	consts, undeclared, err := OS.processFile(arch, file.info)
+	consts, undeclared, err := extractor.processFile(arch, file.info)
 	if err != nil {
 		return nil, nil, err
 	}

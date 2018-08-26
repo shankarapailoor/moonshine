@@ -291,7 +291,7 @@ func evalFields(syzFields []prog.Type, straceFields []irType, ctx *Context) []pr
 	j := 0
 	for i := range syzFields {
 		if prog.IsPad(syzFields[i]) {
-			args = append(args, ctx.Target.DefaultArg(syzFields[i]))
+			args = append(args, prog.DefaultArg(syzFields[i]))
 		} else {
 			if j >= len(straceFields) {
 				args = append(args, GenDefaultArg(syzFields[i], ctx))
@@ -502,7 +502,7 @@ func parsePtrType(syzType *prog.PtrType, traceType irType, ctx *Context) (prog.A
 	switch a := traceType.(type) {
 	case *pointerType:
 		if a.IsNull() {
-			return ctx.Target.DefaultArg(syzType), nil
+			return prog.DefaultArg(syzType), nil
 		}
 		if a.Res == nil {
 			res := GenDefaultArg(syzType.Type, ctx)
@@ -529,7 +529,7 @@ func parsePtrType(syzType *prog.PtrType, traceType irType, ctx *Context) (prog.A
 
 func parseConstType(syzType prog.Type, traceType irType, ctx *Context) (prog.Arg, error) {
 	if syzType.Dir() == prog.DirOut {
-		return ctx.Target.DefaultArg(syzType), nil
+		return prog.DefaultArg(syzType), nil
 	}
 	switch a := traceType.(type) {
 	case *expression:
@@ -592,7 +592,7 @@ func parseResourceType(syzType *prog.ResourceType, traceType irType, ctx *Contex
 	case *expression:
 		val := a.Eval(ctx.Target)
 		if arg := ctx.ReturnCache.get(syzType, traceType); arg != nil {
-			res := prog.MakeResultArg(arg.Type(), arg.(*prog.ResultArg), arg.Type().Default())
+			res := prog.MakeResultArg(syzType, arg.(*prog.ResultArg), syzType.Default())
 			return res, nil
 		}
 		res := prog.MakeResultArg(syzType, nil, val)
@@ -634,13 +634,13 @@ func parseProcType(syzType *prog.ProcType, traceType irType, ctx *Context) (prog
 func GenDefaultArg(syzType prog.Type, ctx *Context) prog.Arg {
 	switch a := syzType.(type) {
 	case *prog.PtrType:
-		res := ctx.Target.DefaultArg(a.Type)
+		res := prog.DefaultArg(a.Type)
 		ptr, _ := addr(ctx, syzType, res.Size(), res)
 		return ptr
 	case *prog.IntType, *prog.ConstType, *prog.FlagsType, *prog.LenType, *prog.ProcType, *prog.CsumType:
-		return ctx.Target.DefaultArg(a)
+		return prog.DefaultArg(a)
 	case *prog.BufferType:
-		return ctx.Target.DefaultArg(a)
+		return prog.DefaultArg(a)
 	case *prog.StructType:
 		var inner []prog.Arg
 		for _, field := range a.Fields {
@@ -651,11 +651,11 @@ func GenDefaultArg(syzType prog.Type, ctx *Context) prog.Arg {
 		optType := a.Fields[0]
 		return prog.MakeUnionArg(a, GenDefaultArg(optType, ctx))
 	case *prog.ArrayType:
-		return ctx.Target.DefaultArg(syzType)
+		return prog.DefaultArg(syzType)
 	case *prog.ResourceType:
-		return prog.MakeResultArg(syzType, nil, a.Desc.Type.Default())
+		return prog.MakeResultArg(syzType, nil, a.Default())
 	case *prog.VmaType:
-		return ctx.Target.DefaultArg(syzType)
+		return prog.DefaultArg(syzType)
 	default:
 		log.Fatalf("Unsupported Type: %#v", syzType)
 	}

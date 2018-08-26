@@ -236,7 +236,12 @@ func ParseShmat(shmat *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call 
 	ctx.CurrentSyzCall = call
 
 	if arg := ctx.ReturnCache.get(shmat.Args[0], syscall.Args[0]); arg != nil {
-		fd = prog.MakeResultArg(shmat.Args[0], arg.(*prog.ResultArg), arg.Type().Default())
+		switch a := arg.Type().(type) {
+		case *prog.ResourceType:
+			fd = prog.MakeResultArg(shmat.Args[0], arg.(*prog.ResultArg), a.Default())
+		default:
+			log.Fatalf("Expected first argument of Shmat to be resource type. Got: %s\n", a.Name())
+		}
 	} else {
 		switch a := syscall.Args[0].(type) {
 		case *expression:
@@ -328,7 +333,12 @@ func ParseFd(syzType prog.Type, straceType irType, ctx *Context) prog.Arg {
 	log.Logf(3, "Parsing file descriptor for call: %s\n", ctx.CurrentStraceCall.CallName)
 	if arg := ctx.ReturnCache.get(syzType, straceType); arg != nil {
 		log.Logf(3, "File descriptor: %s in the cache\n", straceType.String())
-		return prog.MakeResultArg(arg.Type(), arg.(*prog.ResultArg), arg.Type().Default())
+		switch a := syzType.(type) {
+		case *prog.ResourceType:
+			return prog.MakeResultArg(arg.Type(), arg.(*prog.ResultArg), a.Default())
+		default:
+			log.Fatalf("Parsing fd for memory call. Expected resource type. Got: %s", a.String())
+		}
 	}
 	switch a := straceType.(type) {
 	case *expression:

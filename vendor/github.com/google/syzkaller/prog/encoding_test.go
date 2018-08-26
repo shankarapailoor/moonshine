@@ -131,80 +131,80 @@ func TestDeserialize(t *testing.T) {
 		err    *regexp.Regexp
 	}{
 		{
-			input: `syz_test$struct(&(0x7f0000000000)={0x0, {0x0}})`,
+			input: `test$struct(&(0x7f0000000000)={0x0, {0x0}})`,
 		},
 		{
-			input:  `syz_test$struct(&(0x7f0000000000)=0x0)`,
-			output: `syz_test$struct(&(0x7f0000000000))`,
+			input:  `test$struct(&(0x7f0000000000)=0x0)`,
+			output: `test$struct(&(0x7f0000000000))`,
 		},
 		{
-			input: `syz_test$regression1(&(0x7f0000000000)=[{"000000"}, {"0000000000"}])`,
+			input: `test$regression1(&(0x7f0000000000)=[{"000000"}, {"0000000000"}])`,
 		},
 		{
-			input: `syz_test$regression2(&(0x7f0000000000)=[0x1, 0x2, 0x3, 0x4, 0x5, 0x6])`,
+			input: `test$regression2(&(0x7f0000000000)=[0x1, 0x2, 0x3, 0x4, 0x5, 0x6])`,
 		},
 		{
-			input: `syz_test$excessive_args1(0x0, 0x1, {0x1, &(0x7f0000000000)=[0x1, 0x2]})`,
+			input: `test$excessive_args1(0x0, 0x1, {0x1, &(0x7f0000000000)=[0x1, 0x2]})`,
 		},
 		{
-			input: `syz_test$excessive_args2(0x0, 0x1, {0x1, &(0x7f0000000000)={0x1, 0x2}})`,
+			input: `test$excessive_args2(0x0, 0x1, {0x1, &(0x7f0000000000)={0x1, 0x2}})`,
 		},
 		{
-			input: `syz_test$excessive_args2(0x0, 0x1, {0x1, &(0x7f0000000000)=nil})`,
+			input: `test$excessive_args2(0x0, 0x1, {0x1, &(0x7f0000000000)=nil})`,
 		},
 		{
-			input: `syz_test$excessive_args2(0x0, &(0x7f0000000000), 0x0)`,
+			input: `test$excessive_args2(0x0, &(0x7f0000000000), 0x0)`,
 		},
 		{
-			input: `syz_test$excessive_fields1(&(0x7f0000000000)={0x1, &(0x7f0000000000)=[{0x0}, 0x2]}, {0x1, 0x2, [0x1, 0x2]})`,
+			input: `test$excessive_fields1(&(0x7f0000000000)={0x1, &(0x7f0000000000)=[{0x0}, 0x2]}, {0x1, 0x2, [0x1, 0x2]})`,
 		},
 		{
-			input:  `syz_test$excessive_fields1(0x0)`,
-			output: `syz_test$excessive_fields1(&(0x7f0000000000))`,
+			input:  `test$excessive_fields1(0x0)`,
+			output: `test$excessive_fields1(&(0x7f0000000000))`,
 		},
 		{
-			input:  `syz_test$excessive_fields1(r0)`,
-			output: `syz_test$excessive_fields1(&(0x7f0000000000))`,
+			input:  `test$excessive_fields1(r0)`,
+			output: `test$excessive_fields1(&(0x7f0000000000))`,
 		},
 		{
-			input:  `syz_test$excessive_args2(r1)`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2(r1)`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2({0x0, 0x1})`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2({0x0, 0x1})`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2([0x0], 0x0)`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2([0x0], 0x0)`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2(@foo)`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2(@foo)`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2('foo')`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2('foo')`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2(&(0x7f0000000000)={0x0, 0x1})`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2(&(0x7f0000000000)={0x0, 0x1})`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$excessive_args2(nil)`,
-			output: `syz_test$excessive_args2(0x0)`,
+			input:  `test$excessive_args2(nil)`,
+			output: `test$excessive_args2(0x0)`,
 		},
 		{
-			input:  `syz_test$type_confusion1(&(0x7f0000000000)=@unknown)`,
-			output: `syz_test$type_confusion1(&(0x7f0000000000))`,
+			input:  `test$type_confusion1(&(0x7f0000000000)=@unknown)`,
+			output: `test$type_confusion1(&(0x7f0000000000))`,
 		},
 		{
-			input:  `syz_test$type_confusion1(&(0x7f0000000000)=@unknown={0x0, 'abc'}, 0x0)`,
-			output: `syz_test$type_confusion1(&(0x7f0000000000))`,
+			input:  `test$type_confusion1(&(0x7f0000000000)=@unknown={0x0, 'abc'}, 0x0)`,
+			output: `test$type_confusion1(&(0x7f0000000000))`,
 		},
 		{
-			input:  `syz_test$excessive_fields1(&(0x7f0000000000)=0x0)`,
-			output: `syz_test$excessive_fields1(&(0x7f0000000000))`,
+			input:  `test$excessive_fields1(&(0x7f0000000000)=0x0)`,
+			output: `test$excessive_fields1(&(0x7f0000000000))`,
 		},
 	}
 	buf := make([]byte, ExecBufferSize)
@@ -302,4 +302,45 @@ func testSerializeDeserialize(t *testing.T, p0 *Prog, data0, data1 []byte) (bool
 		return false, n0, n1
 	}
 	return true, 0, 0
+}
+
+func TestDeserializeComments(t *testing.T) {
+	target := initTargetTest(t, "test", "64")
+	p, err := target.Deserialize([]byte(`
+# comment1
+# comment2
+serialize0()
+serialize0()
+# comment3
+serialize0()
+# comment4
+serialize0()	#  comment5
+#comment6
+
+serialize0()
+#comment7
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i, want := range []string{
+		"comment2",
+		"",
+		"comment3",
+		"comment5",
+		"",
+	} {
+		if got := p.Calls[i].Comment; got != want {
+			t.Errorf("bad call %v comment: %q, want %q", i, got, want)
+		}
+	}
+	wantComments := []string{
+		"comment1",
+		"comment4",
+		"comment6",
+		"comment7",
+	}
+	if !reflect.DeepEqual(p.Comments, wantComments) {
+		t.Errorf("bad program comments %q\nwant: %q", p.Comments, wantComments)
+	}
 }
