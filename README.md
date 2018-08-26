@@ -22,7 +22,7 @@ MoonShine is mostly written in Go so the first step is to setup Go. You can eith
 
 ```bash
 $ wget https://dl.google.com/go/go1.10.3.linux-amd64.tar.gz
-$ tar -C /usr/local -xzf go1.10.3.linux-amd64.tar.gz
+$ sudo tar -C /usr/local -xzf go1.10.3.linux-amd64.tar.gz
 $ export PATH=$PATH:/usr/local/go/bin
 $ go version
 go version go1.10.3 linux/amd64
@@ -44,7 +44,7 @@ go get golang.org/x/tools/cmd/goyacc
 goyacc gets installed in ```$HOME/go/bin``` (or ```$GOPATH/bin``` if workspace is not in the home directory). Make sure this directory is on your $PATH.
 
 ```bash
-$ export PATH=PATH:$HOME/go/bin
+$ export PATH=$PATH:$HOME/go/bin
 ```
 
 ## Build and Run MoonShine
