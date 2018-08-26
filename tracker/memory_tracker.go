@@ -6,12 +6,12 @@ import (
 )
 
 const (
-	memAllocMaxMem  = 16 << 20
+	memAllocMaxMem = 16 << 20
 )
 
 type Allocation struct {
 	num_bytes uint64
-	arg Arg
+	arg       Arg
 }
 
 /*
@@ -20,41 +20,40 @@ virtual memory mapping. We assume the dependency is contiguous
 as we will allocate pointers for arguments in a separate mmap at the
 beginning of the function. Moreover there are no calls which we know of
 that take a list of pages as arguments.
- */
+*/
 type MemDependency struct {
 	Callidx int
-	arg Arg
-	start uint64
-	end uint64
+	arg     Arg
+	start   uint64
+	end     uint64
 }
 
 func NewMemDependency(callidx int, usedBy Arg, start uint64, end uint64) *MemDependency {
 	return &MemDependency{
 		Callidx: callidx,
-		arg: usedBy,
-		start: start,
-		end: end,
+		arg:     usedBy,
+		start:   start,
+		end:     end,
 	}
 }
 
 type VirtualMapping struct {
-	usedBy []*MemDependency
+	usedBy    []*MemDependency
 	createdBy *Call
-	callidx int
-	start uint64
-	end uint64
+	callidx   int
+	start     uint64
+	end       uint64
 }
 
 type ShmRequest struct {
-	size uint64
+	size  uint64
 	shmid uint64
-	call *Call
+	call  *Call
 }
 
-func (s *ShmRequest) GetSize() uint64{
+func (s *ShmRequest) GetSize() uint64 {
 	return s.size
 }
-
 
 func (vm *VirtualMapping) GetUsedBy() []*MemDependency {
 	return vm.usedBy
@@ -64,11 +63,11 @@ func (vm *VirtualMapping) AddDependency(md *MemDependency) {
 	vm.usedBy = append(vm.usedBy, md)
 }
 
-func (vm *VirtualMapping) GetEnd() uint64{
+func (vm *VirtualMapping) GetEnd() uint64 {
 	return vm.end
 }
 
-func (vm *VirtualMapping) GetStart() uint64{
+func (vm *VirtualMapping) GetStart() uint64 {
 	return vm.start
 }
 
@@ -82,7 +81,7 @@ func (vm *VirtualMapping) GetCallIdx() int {
 
 type MemoryTracker struct {
 	allocations map[*Call][]*Allocation
-	mappings []*VirtualMapping
+	mappings    []*VirtualMapping
 	/*
 	 We keep the SYSTEM V shared mapping requests because
 	 the creation of memory is broken into two steps: shmget, shmat
@@ -90,7 +89,7 @@ type MemoryTracker struct {
 	 shmat generates the address for the given segment using the id but
 	 when we add the address to our tracker we need to know the size.
 	 Memory tracker seems like a good place to keep the requests
-	 */
+	*/
 	shm_requests []*ShmRequest
 }
 
@@ -103,14 +102,14 @@ func NewTracker() *MemoryTracker {
 
 func (m *MemoryTracker) AddShmRequest(call *Call, shmid uint64, size uint64) {
 	shm_request := &ShmRequest{
-		size: size,
+		size:  size,
 		shmid: shmid,
-		call: call,
+		call:  call,
 	}
 	m.shm_requests = append(m.shm_requests, shm_request)
 }
 
-func (m *MemoryTracker) FindShmRequest(shmid uint64) *ShmRequest{
+func (m *MemoryTracker) FindShmRequest(shmid uint64) *ShmRequest {
 	//Get the latest Request associated with id
 	var ret *ShmRequest = nil
 	for _, req := range m.shm_requests {
@@ -126,10 +125,10 @@ func (m *MemoryTracker) CreateMapping(call *Call, callidx int, arg Arg, start ui
 
 	mapping := &VirtualMapping{
 		createdBy: call,
-		callidx: callidx,
-		start: start,
-		end: end,
-		usedBy: make([]*MemDependency, 0),
+		callidx:   callidx,
+		start:     start,
+		end:       end,
+		usedBy:    make([]*MemDependency, 0),
 	}
 	mapping.usedBy = append(mapping.usedBy, &MemDependency{start: start, end: end, arg: arg})
 	m.mappings = append(m.mappings, mapping)
@@ -137,8 +136,8 @@ func (m *MemoryTracker) CreateMapping(call *Call, callidx int, arg Arg, start ui
 
 func (m *MemoryTracker) Mappings(start uint64, end uint64) []*VirtualMapping {
 	/*
-	Get all mappings whose totality encompasses start and end.
-	 */
+		Get all mappings whose totality encompasses start and end.
+	*/
 	maps := make([]*VirtualMapping, 0)
 
 	for _, mapping := range m.mappings {
@@ -180,14 +179,30 @@ func (m *MemoryTracker) AddAllocation(call *Call, size uint64, arg Arg) {
 
 func (m *MemoryTracker) TrackDependency(arg Arg, start uint64, end uint64, mapping *VirtualMapping) {
 	dependency := &MemDependency{
-		arg: arg,
+		arg:   arg,
 		start: start,
-		end: end,
+		end:   end,
 	}
 	mapping.usedBy = append(mapping.usedBy, dependency)
 }
 
-func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
+func (m *MemoryTracker) FillOutMemory(prog *Prog) (err error) {
+	var offset uint64
+	if offset, err = m.fillOutPtrArgs(prog); err != nil {
+		return
+	}
+
+	if offset%PageSize > 0 {
+		offset = (offset/PageSize + 1) * PageSize
+	}
+
+	if err = m.fillOutMmaps(prog, offset); err != nil {
+		return
+	}
+	return nil
+}
+
+func (m *MemoryTracker) fillOutPtrArgs(prog *Prog) (uint64, error) {
 	offset := uint64(0)
 
 	for _, call := range prog.Calls {
@@ -200,10 +215,10 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 			case *PointerArg:
 				arg.Address = offset
 				offset += a.num_bytes
-				i += 1
+				i++
 				if arg.Address >= memAllocMaxMem {
-					return fmt.Errorf("Unable to allocate space to store arg: %#v" +
-						"in Call: %v. Required memory is larger than what is allowed by Syzkaller." +
+					return 0, fmt.Errorf("Unable to allocate space to store arg: %#v"+
+						"in Call: %v. Required memory is larger than what is allowed by Syzkaller."+
 						"Offending address: %d. Skipping seed generation for this prog...\n",
 						arg, call, arg.Address)
 				}
@@ -212,10 +227,15 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 			}
 		}
 	}
-	if offset % PageSize > 0 {
-		offset = (offset/PageSize+1)*PageSize
+
+	if offset%PageSize > 0 {
+		offset = (offset/PageSize + 1) * PageSize
 	}
 
+	return offset, nil
+}
+
+func (m *MemoryTracker) fillOutMmaps(prog *Prog, offset uint64) error {
 	for _, mapping := range m.mappings {
 		for _, dep := range mapping.usedBy {
 			switch arg_ := dep.arg.(type) {
@@ -224,9 +244,9 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 				arg_.Address = offset + dep.start - mapping.start
 
 				arg_.Res = nil
-				if arg_.Address >= memAllocMaxMem || arg_.Address+arg_.VmaSize > memAllocMaxMem{
-					return fmt.Errorf("Unable to allocate space for vma Call: %#v " +
-						"Required memory is larger than what is allowed by Syzkaller." +
+				if arg_.Address >= memAllocMaxMem || arg_.Address+arg_.VmaSize > memAllocMaxMem {
+					return fmt.Errorf("Unable to allocate space for vma Call: %#v "+
+						"Required memory is larger than what is allowed by Syzkaller."+
 						"Offending address: %d. Skipping seed generation for this prog...\n",
 						mapping.GetCall(), arg_.Address)
 				}
@@ -239,7 +259,7 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 	return nil
 }
 
-func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64{
+func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64 {
 	sum := uint64(0)
 	for _, call := range prog.Calls {
 		if _, ok := m.allocations[call]; !ok {
@@ -249,8 +269,8 @@ func (m *MemoryTracker) GetTotalMemoryAllocations(prog *Prog) uint64{
 			sum += a.num_bytes
 		}
 	}
-	if sum % PageSize > 0 {
-		sum = (sum/PageSize+1)*PageSize
+	if sum%PageSize > 0 {
+		sum = (sum/PageSize + 1) * PageSize
 	}
 	return sum
 }
@@ -262,7 +282,6 @@ func (m *MemoryTracker) GetTotalVMAAllocations(prog *Prog) uint64 {
 		callMap[call] = true
 	}
 
-
 	for _, mapping := range m.mappings {
 		if _, ok := callMap[mapping.createdBy]; ok {
 			sum += (mapping.end - mapping.start)
@@ -270,4 +289,3 @@ func (m *MemoryTracker) GetTotalVMAAllocations(prog *Prog) uint64 {
 	}
 	return sum
 }
-

@@ -24,7 +24,6 @@ import (
 // Note: the current implementation is very basic, there is no theory behind any
 // constants.
 
-
 func (target *Target) CalculatePriorities(corpus []*Prog) [][]float32 {
 	static := target.calcStaticPriorities()
 	dynamic := target.calcDynamicPrio(corpus)
@@ -34,73 +33,11 @@ func (target *Target) CalculatePriorities(corpus []*Prog) [][]float32 {
 		}
 	}
 	return dynamic
-  return static
+	return static
 }
 
 func (target *Target) calcStaticPriorities() [][]float32 {
-	uses := make(map[string]map[int]float32)
-	for _, c := range target.Syscalls {
-		noteUsage := func(weight float32, str string, args ...interface{}) {
-			id := fmt.Sprintf(str, args...)
-			if uses[id] == nil {
-				uses[id] = make(map[int]float32)
-			}
-			old := uses[id][c.ID]
-			if weight > old {
-				uses[id][c.ID] = weight
-			}
-		}
-		ForeachType(c, func(t Type) {
-			switch a := t.(type) {
-			case *ResourceType:
-				if a.Desc.Name == "pid" || a.Desc.Name == "uid" || a.Desc.Name == "gid" {
-					// Pid/uid/gid usually play auxiliary role,
-					// but massively happen in some structs.
-					noteUsage(0.1, "res%v", a.Desc.Name)
-				} else {
-					str := "res"
-					for i, k := range a.Desc.Kind {
-						str += "-" + k
-						w := 1.0
-						if i < len(a.Desc.Kind)-1 {
-							w = 0.2
-						}
-						noteUsage(float32(w), str)
-					}
-				}
-			case *PtrType:
-				if _, ok := a.Type.(*StructType); ok {
-					noteUsage(1.0, "ptrto-%v", a.Type.Name())
-				}
-				if _, ok := a.Type.(*UnionType); ok {
-					noteUsage(1.0, "ptrto-%v", a.Type.Name())
-				}
-				if arr, ok := a.Type.(*ArrayType); ok {
-					noteUsage(1.0, "ptrto-%v", arr.Type.Name())
-				}
-			case *BufferType:
-				switch a.Kind {
-				case BufferBlobRand, BufferBlobRange, BufferText:
-				case BufferString:
-					if a.SubKind != "" {
-						noteUsage(0.2, fmt.Sprintf("str-%v", a.SubKind))
-					}
-				case BufferFilename:
-					noteUsage(1.0, "filename")
-				default:
-					panic("unknown buffer kind")
-				}
-			case *VmaType:
-				noteUsage(0.5, "vma")
-			case *IntType:
-				switch a.Kind {
-				case IntPlain, IntFileoff, IntRange:
-				default:
-					panic("unknown int kind")
-				}
-			}
-		})
-	}
+	uses := target.calcResourceUsage()
 	prios := make([][]float32, len(target.Syscalls))
 	for i := range prios {
 		prios[i] = make([]float32, len(target.Syscalls))
@@ -130,6 +67,74 @@ func (target *Target) calcStaticPriorities() [][]float32 {
 	}
 	normalizePrio(prios)
 	return prios
+}
+
+func (target *Target) calcResourceUsage() map[string]map[int]float32 {
+	uses := make(map[string]map[int]float32)
+	for _, c := range target.Syscalls {
+		ForeachType(c, func(t Type) {
+			switch a := t.(type) {
+			case *ResourceType:
+				if a.Desc.Name == "pid" || a.Desc.Name == "uid" || a.Desc.Name == "gid" {
+					// Pid/uid/gid usually play auxiliary role,
+					// but massively happen in some structs.
+					noteUsage(uses, c, 0.1, "res%v", a.Desc.Name)
+				} else {
+					str := "res"
+					for i, k := range a.Desc.Kind {
+						str += "-" + k
+						w := 1.0
+						if i < len(a.Desc.Kind)-1 {
+							w = 0.2
+						}
+						noteUsage(uses, c, float32(w), str)
+					}
+				}
+			case *PtrType:
+				if _, ok := a.Type.(*StructType); ok {
+					noteUsage(uses, c, 1.0, "ptrto-%v", a.Type.Name())
+				}
+				if _, ok := a.Type.(*UnionType); ok {
+					noteUsage(uses, c, 1.0, "ptrto-%v", a.Type.Name())
+				}
+				if arr, ok := a.Type.(*ArrayType); ok {
+					noteUsage(uses, c, 1.0, "ptrto-%v", arr.Type.Name())
+				}
+			case *BufferType:
+				switch a.Kind {
+				case BufferBlobRand, BufferBlobRange, BufferText:
+				case BufferString:
+					if a.SubKind != "" {
+						noteUsage(uses, c, 0.2, fmt.Sprintf("str-%v", a.SubKind))
+					}
+				case BufferFilename:
+					noteUsage(uses, c, 1.0, "filename")
+				default:
+					panic("unknown buffer kind")
+				}
+			case *VmaType:
+				noteUsage(uses, c, 0.5, "vma")
+			case *IntType:
+				switch a.Kind {
+				case IntPlain, IntFileoff, IntRange:
+				default:
+					panic("unknown int kind")
+				}
+			}
+		})
+	}
+	return uses
+}
+
+func noteUsage(uses map[string]map[int]float32, c *Syscall, weight float32, str string, args ...interface{}) {
+	id := fmt.Sprintf(str, args...)
+	if uses[id] == nil {
+		uses[id] = make(map[int]float32)
+	}
+	old := uses[id][c.ID]
+	if weight > old {
+		uses[id][c.ID] = weight
+	}
 }
 
 func (target *Target) calcDynamicPrio(corpus []*Prog) [][]float32 {
@@ -197,7 +202,6 @@ type ChoiceTable struct {
 	enabled      map[*Syscall]bool
 }
 
-
 func (target *Target) BuildChoiceTable(prios [][]float32, enabled map[*Syscall]bool) *ChoiceTable {
 	if enabled == nil {
 		enabled = make(map[*Syscall]bool)
@@ -239,7 +243,7 @@ func (ct *ChoiceTable) Choose(r *rand.Rand, call int) int {
 		return ct.enabledCalls[r.Intn(len(ct.enabledCalls))].ID
 	}
 	run := ct.run[call] // get array of prios for that specific call
-	if run == nil { // return random call, no prio info to judge
+	if run == nil {     // return random call, no prio info to judge
 		return ct.enabledCalls[r.Intn(len(ct.enabledCalls))].ID
 	}
 	for {

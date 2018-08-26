@@ -26,7 +26,6 @@ include <linux/ioctl.h>
 include <linux/fadvise.h>
 include <linux/falloc.h>
 include <linux/futex.h>
-include <linux/aio_abi.h>
 include <linux/kexec.h>
 include <linux/seccomp.h>
 include <linux/elf.h>
@@ -48,7 +47,7 @@ include <linux/tcp.h>
 include <linux/udp.h>
 include <linux/kcmp.h>
 include <linux/syslog.h>
-include <linux/memfd.h>
+include <uapi/linux/memfd.h>
 include <uapi/linux/module.h>
 include <asm/prctl.h>
 include <linux/ioprio.h>
@@ -57,9 +56,7 @@ include <uapi/linux/kcov.h>
 include <uapi/linux/membarrier.h>
 
 
-# write breaks on the first, and AT_FDCWD is current working directory
-
-resource fd[int32]: 0xffffffffffffffff, AT_FDCWD
+resource fd[int32]: -1, AT_FDCWD
 resource fd_dir[fd]
 
 type signalno int32[0:65]
@@ -68,7 +65,7 @@ open(file ptr[in, filename], flags flags[open_flags], mode flags[open_mode]) fd
 # Just so that we have something that creates fd_dir resources.
 open$dir(file ptr[in, filename], flags flags[open_flags], mode flags[open_mode]) fd_dir
 openat$dir(fd const[AT_FDCWD], file ptr[in, filename], flags flags[open_flags], mode flags[open_mode]) fd_dir
-openat(fd fd_dir, file ptr[in, filename], flags flags[open_flags], mode flags[open_mode]) fd
+openat(fd fd_dir[opt], file ptr[in, filename], flags flags[open_flags], mode flags[open_mode]) fd
 creat(file ptr[in, filename], mode flags[open_mode]) fd
 close(fd fd)
 read(fd fd, buf buffer[out], count len[buf])
@@ -151,7 +148,7 @@ memfd_create(name ptr[in, string], flags flags[memfd_flags]) fd
 kcmp(pid1 pid, pid2 pid, type flags[kcmp_flags], fd1 fd, fd2 fd)
 kcmp$KCMP_EPOLL_TFD(pid1 pid, pid2 pid, type const[KCMP_EPOLL_TFD], fd1 fd, idx2 ptr[in, kcmp_epoll_slot])
 
-resource pkey[int32]: 0xffffffffffffffff
+resource pkey[int32]: -1
 pkey_alloc(flags const[0], val flags[pkey_flags]) pkey
 pkey_free(key pkey)
 pkey_mprotect(addr vma, len len[addr], prot flags[mmap_prot], key pkey)
@@ -169,6 +166,60 @@ ioctl$void(fd fd, cmd flags[ioctl_void])
 ioctl$int_in(fd fd, cmd flags[ioctl_int_in], v ptr[in, int64])
 ioctl$int_out(fd fd, cmd flags[ioctl_int_out], v ptr[out, intptr])
 ioctl$fiemap(fd fd, cmd const[FS_IOC_FIEMAP], v ptr[in, fiemap])
+ioctl$FS_IOC_RESVSP(fd fd, cmd const[FS_IOC_RESVSP], arg ptr[in, space_resv])
+ioctl$FIBMAP(fd fd, cmd const[FIBMAP], arg ptr[in, int32])
+ioctl$FICLONE(fd fd, cmd const[FICLONE], arg fd)
+ioctl$FICLONERANGE(fd fd, cmd const[FICLONERANGE], arg ptr[in, file_clone_range])
+ioctl$FIDEDUPERANGE(fd fd, cmd const[FIDEDUPERANGE], arg ptr[in, file_dedupe_range])
+ioctl$FS_IOC_FSGETXATTR(fd fd, cmd const[FS_IOC_FSGETXATTR], arg ptr[in, fsxattr])
+ioctl$FS_IOC_FSSETXATTR(fd fd, cmd const[FS_IOC_FSSETXATTR], arg ptr[in, fsxattr])
+ioctl$FS_IOC_GETFSLABEL(fd fd, cmd const[FS_IOC_GETFSLABEL], arg ptr[out, array[const[0, int8], FSLABEL_MAX]])
+ioctl$FS_IOC_SETFSLABEL(fd fd, cmd const[FS_IOC_SETFSLABEL], arg ptr[in, array[int8, FSLABEL_MAX]])
+
+space_resv {
+	l_type		const[0, int16]
+	l_whence	flags[seek_whence, int16]
+	l_start		int64
+	l_len		int64
+	l_sysid		const[0, int32]
+	l_pid		const[0, int32]
+	l_pad		array[const[0, int32], 4]
+}
+
+file_clone_range {
+	src_fd		fd
+	pad		const[0, int32]
+	src_offset	int64
+	src_length	int64
+	dest_offset	int64
+}
+
+file_dedupe_range {
+	src_offset	int64
+	src_length	int64
+	dest_count	len[info, int16]
+	reserved1	const[0, int16]
+	reserved2	const[0, int32]
+	info		array[file_dedupe_range_info]
+}
+
+file_dedupe_range_info {
+	dest_fd		fd
+	pad		const[0, int32]
+	dest_offset	int64
+	bytes_deduped	const[0, int64]
+	status		const[0, int32]
+	reserved	const[0, int32]
+}
+
+fsxattr {
+	fsx_xflags	int32
+	fsx_extsize	int32
+	fsx_nextents	int32
+	fsx_projid	int32
+	fsx_cowextsize	int32
+	fsx_pad		const[0, int64]
+}
 
 fcntl$dupfd(fd fd, cmd flags[fcntl_dupfd], arg fd) fd
 fcntl$getflags(fd fd, cmd flags[fcntl_getflags])
@@ -211,15 +262,6 @@ seccomp_metadata {
 	flags		const[0, int32]
 }
 
-resource io_ctx[intptr]
-io_setup(n int32, ctx ptr[out, io_ctx])
-io_destroy(ctx io_ctx)
-io_getevents(ctx io_ctx, min_nr intptr, nr len[events], events ptr[out, array[io_event]], timeout ptr[in, timespec])
-# TODO: kernel identifies requets by address, so pointers passed to io_submit
-# need to be forwarded to io_cancel somehow.
-io_submit(ctx io_ctx, nr len[iocbpp], iocbpp ptr[in, array[ptr[in, iocb]]])
-io_cancel(ctx io_ctx, iocb ptr[in, iocb], res ptr[out, io_event])
-
 capget(hdr ptr[in, cap_header], data ptr[in, cap_data])
 capset(hdr ptr[in, cap_header], data ptr[in, cap_data])
 
@@ -238,7 +280,7 @@ arch_prctl(code flags[arch_prctl_code], addr buffer[in])
 seccomp(op flags[seccomp_op], flags flags[seccomp_flags], prog ptr[in, sock_fprog])
 
 resource fd_mq[fd]
-mq_open(name ptr[in, string], flags flags[mq_open_flags], mode flags[open_mode], attr ptr[in, mq_attr]) fd_mq
+mq_open(name ptr[in, string], flags flags[mq_open_flags], mode flags[open_mode], attr ptr[in, mq_attr, opt]) fd_mq
 mq_timedsend(mqd fd_mq, msg buffer[in], msglen len[msg], prio intptr, timeout ptr[in, timespec, opt])
 mq_timedreceive(mqd fd_mq, msg buffer[out], msglen len[msg], prio intptr, timeout ptr[in, timespec, opt])
 mq_notify(mqd fd_mq, notif ptr[in, sigevent])
@@ -264,9 +306,9 @@ utimensat(dir fd_dir, pathname ptr[in, filename], times ptr[in, itimerval], flag
 
 clone(flags flags[clone_flags], sp buffer[in], parentid ptr[out, int32], childtid ptr[out, int32], tls buffer[in])
 
-resource pid[int32]: 0, 0xffffffffffffffff
-resource uid[int32]: 0, 0xffffffffffffffff
-resource gid[int32]: 0, 0xffffffffffffffff
+resource pid[int32]: 0, -1
+resource uid[int32]: 0, -1, 0xee00, 0xee01
+resource gid[int32]: 0, -1, 0xee00, 0xee01
 
 getgid() gid
 getegid() gid
@@ -429,7 +471,29 @@ sched_getattr(pid pid, attr ptr[out, sched_attr], size len[attr], flags flags[sc
 sched_setattr(pid pid, attr ptr[in, sched_attr], flags flags[sched_attr_flags])
 sched_yield()
 getrandom(buf buffer[out], len len[buf], flags flags[getrandom_flags])
+
 membarrier(cmd flags[membarrier_cmd], flags const[0])
+
+membarrier_cmd = MEMBARRIER_CMD_GLOBAL, MEMBARRIER_CMD_GLOBAL_EXPEDITED, MEMBARRIER_CMD_PRIVATE_EXPEDITED, MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE, MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
+
+rseq(rseq ptr[in, rseq], rseq_len bytesize[rseq], flags boolptr, sig const[0])
+
+rseq {
+	cpu_id_start	const[0, int32]
+	cpu_id		const[0, int32]
+	rseq_cs		ptr[in, rseq_cs, opt]
+	flags		flags[rseq_cs_flags, int32]
+} [align_32]
+
+rseq_cs {
+	version			const[0, int32]
+	flags			flags[rseq_cs_flags, int32]
+	start_ip		intptr
+	post_commit_offset	intptr
+	abort_ip		intptr
+} [align_32]
+
+rseq_cs_flags = RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, RSEQ_CS_FLAG_NO_RESTART_ON_SIGNAL, RSEQ_CS_FLAG_NO_RESTART_ON_MIGRATE
 
 syz_open_procfs(pid pid, file ptr[in, string[procfs_file]]) fd
 
@@ -461,7 +525,6 @@ syz_open_dev$amidi(dev ptr[in, string["/dev/amidi#"]], id intptr, flags flags[op
 syz_open_dev$audion(dev ptr[in, string["/dev/audio#"]], id intptr, flags flags[open_flags]) fd
 syz_open_dev$usb(dev ptr[in, string["/dev/bus/usb/00#/00#"]], id intptr, flags flags[open_flags]) fd
 syz_open_dev$sndhw(dev ptr[in, string["/dev/snd/hwC#D#"]], id intptr, flags flags[open_flags]) fd
-syz_open_dev$sndmidi(dev ptr[in, string["/dev/snd/midiC#D#"]], id intptr, flags flags[open_flags]) fd
 syz_open_dev$sndpcmc(dev ptr[in, string["/dev/snd/pcmC#D#c"]], id intptr, flags flags[open_flags]) fd
 syz_open_dev$sndpcmp(dev ptr[in, string["/dev/snd/pcmC#D#p"]], id intptr, flags flags[open_flags]) fd
 
@@ -469,8 +532,6 @@ openat$null(fd const[AT_FDCWD], file ptr[in, string["/dev/null"]], flags flags[o
 openat$zero(fd const[AT_FDCWD], file ptr[in, string["/dev/zero"]], flags flags[open_flags], mode const[0]) fd
 openat$full(fd const[AT_FDCWD], file ptr[in, string["/dev/full"]], flags flags[open_flags], mode const[0]) fd
 openat$snapshot(fd const[AT_FDCWD], file ptr[in, string["/dev/snapshot"]], flags flags[open_flags], mode const[0]) fd
-openat$uinput(fd const[AT_FDCWD], file ptr[in, string["/dev/uinput"]], flags flags[open_flags], mode const[0]) fd
-openat$urandom(fd const[AT_FDCWD], file ptr[in, string["/dev/urandom"]], flags flags[open_flags], mode const[0]) fd
 openat$vga_arbiter(fd const[AT_FDCWD], file ptr[in, string["/dev/vga_arbiter"]], flags flags[open_flags], mode const[0]) fd
 openat$vhci(fd const[AT_FDCWD], file ptr[in, string["/dev/vhci"]], flags flags[open_flags], mode const[0]) fd
 openat$userio(fd const[AT_FDCWD], file ptr[in, string["/dev/userio"]], flags flags[open_flags], mode const[0]) fd
@@ -606,28 +667,6 @@ itimerval {
 utimbuf {
 	actime	intptr
 	modtime	intptr
-}
-
-io_event {
-	data	int64
-	obj	int64
-	res	int64
-	res2	int32
-}
-
-iocb {
-	data	const[0, int64]
-	key	flags[iocb_key, int32]
-	pad	const[0, int32]
-	op	flags[lio_opcode, int16]
-	prio	int16
-	fd	fd
-	buf	ptr64[inout, array[int8]]
-	nbytes	len[buf, int64]
-	offset	int64
-	reserv	const[0, int64]
-	flags	flags[iocb_flags, int32]
-	resfd	fd_event
 }
 
 sigevent {
@@ -827,8 +866,8 @@ user_desc {
 	lm		int32:1
 }
 
-user_desc_bases = 0, 4096, 1048576, 536870912, 536872960, 536875008, 0xffffffff
-user_desc_limits = 0, 1024, 4096, 8192, 16384, 0xffffffff
+user_desc_bases = 0, 4096, 1048576, 536870912, 536872960, 536875008, -1
+user_desc_limits = 0, 1024, 4096, 8192, 16384, -1
 
 sched_attr {
 	size	flags[sched_attr_size, int32]
@@ -910,9 +949,6 @@ eventfd_flags = EFD_CLOEXEC, EFD_NONBLOCK, EFD_SEMAPHORE
 timerfd_create_flags = TFD_NONBLOCK, TFD_CLOEXEC
 timerfd_settime_flags = TFD_TIMER_ABSTIME
 clock_type = CLOCK_REALTIME, CLOCK_REALTIME_COARSE, CLOCK_MONOTONIC, CLOCK_MONOTONIC_COARSE, CLOCK_MONOTONIC_RAW, CLOCK_BOOTTIME, CLOCK_PROCESS_CPUTIME_ID, CLOCK_THREAD_CPUTIME_ID
-lio_opcode = IOCB_CMD_PREAD, IOCB_CMD_PWRITE, IOCB_CMD_FSYNC, IOCB_CMD_FDSYNC, IOCB_CMD_NOOP, IOCB_CMD_PREADV, IOCB_CMD_PWRITEV
-iocb_flags = 0, IOCB_FLAG_RESFD
-iocb_key = 0
 sigev_notify = SIGEV_NONE, SIGEV_SIGNAL, SIGEV_THREAD, SIGEV_THREAD_ID
 cap_version = 0x19980330, 0x20071026, 0x20080522
 prctl_code_void = PR_GET_DUMPABLE, PR_GET_KEEPCAPS, PR_GET_NO_NEW_PRIVS, PR_GET_SECCOMP, PR_GET_SECUREBITS, PR_GET_TIMERSLACK, PR_GET_TIMING, PR_TASK_PERF_EVENTS_DISABLE, PR_TASK_PERF_EVENTS_ENABLE, PR_MCE_KILL_GET
@@ -924,12 +960,11 @@ prctl_seccomp_mode = SECCOMP_MODE_DISABLED, SECCOMP_MODE_STRICT, SECCOMP_MODE_FI
 prctl_mm_option = PR_SET_MM_START_CODE, PR_SET_MM_END_CODE, PR_SET_MM_START_DATA, PR_SET_MM_END_DATA, PR_SET_MM_START_STACK, PR_SET_MM_START_BRK, PR_SET_MM_BRK
 arch_prctl_code = ARCH_SET_FS, ARCH_GET_FS, ARCH_SET_GS, ARCH_GET_GS
 epoll_flags = EPOLL_CLOEXEC
-epoll_op = EPOLL_CTL_ADD, EPOLL_CTL_MOD, EPOLL_CTL_DEL
 epoll_ev = POLLIN, POLLOUT, POLLRDHUP, POLLPRI, POLLERR, POLLHUP, EPOLLET, EPOLLONESHOT, EPOLLEXCLUSIVE, EPOLLWAKEUP
 pollfd_events = POLLIN, POLLPRI, POLLOUT, POLLERR, POLLHUP, POLLNVAL, POLLRDNORM, POLLRDBAND, POLLWRNORM, POLLWRBAND, POLLMSG, POLLREMOVE, POLLRDHUP, POLLFREE, POLL_BUSY_LOOP
 mknod_mode = S_IFREG, S_IFCHR, S_IFBLK, S_IFIFO, S_IFSOCK, S_IRUSR, S_IWUSR, S_IXUSR, S_IRGRP, S_IWGRP, S_IXGRP, S_IROTH, S_IWOTH, S_IXOTH
 at_flags = AT_EMPTY_PATH, AT_SYMLINK_NOFOLLOW, AT_SYMLINK_FOLLOW, AT_NO_AUTOMOUNT, AT_EMPTY_PATH
-fallocate_mode = 0, FALLOC_FL_KEEP_SIZE, FALLOC_FL_PUNCH_HOLE
+fallocate_mode = 0, FALLOC_FL_KEEP_SIZE, FALLOC_FL_PUNCH_HOLE, FALLOC_FL_COLLAPSE_RANGE, FALLOC_FL_ZERO_RANGE, FALLOC_FL_INSERT_RANGE, FALLOC_FL_UNSHARE_RANGE
 linkat_flags = AT_EMPTY_PATH, AT_SYMLINK_FOLLOW
 unlinkat_flags = 0, AT_REMOVEDIR
 renameat2_flags = RENAME_EXCHANGE, RENAME_NOREPLACE, RENAME_WHITEOUT
@@ -1001,12 +1036,8 @@ fiemap_flags = FIEMAP_FLAG_SYNC, FIEMAP_FLAG_XATTR, FIEMAP_FLAG_CACHE
 fiemap_extent_flags = FIEMAP_EXTENT_LAST, FIEMAP_EXTENT_UNKNOWN, FIEMAP_EXTENT_DELALLOC, FIEMAP_EXTENT_ENCODED, FIEMAP_EXTENT_DATA_ENCRYPTED, FIEMAP_EXTENT_NOT_ALIGNED, FIEMAP_EXTENT_DATA_INLINE, FIEMAP_EXTENT_DATA_TAIL, FIEMAP_EXTENT_UNWRITTEN, FIEMAP_EXTENT_MERGED, FIEMAP_EXTENT_SHARED
 getrandom_flags = GRND_NONBLOCK, GRND_RANDOM
 clone_flags = CLONE_VM, CLONE_FS, CLONE_FILES, CLONE_SIGHAND, CLONE_PTRACE, CLONE_VFORK, CLONE_PARENT, CLONE_THREAD, CLONE_NEWNS, CLONE_SYSVSEM, CLONE_SETTLS, CLONE_PARENT_SETTID, CLONE_CHILD_CLEARTID, CLONE_UNTRACED, CLONE_CHILD_SETTID, CLONE_NEWCGROUP, CLONE_NEWUTS, CLONE_NEWIPC, CLONE_NEWUSER, CLONE_NEWPID, CLONE_NEWNET, CLONE_IO
-membarrier_cmd = MEMBARRIER_CMD_GLOBAL, MEMBARRIER_CMD_GLOBAL_EXPEDITED, MEMBARRIER_CMD_PRIVATE_EXPEDITED, MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED, MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE, MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE
 
-kcov_ioctls = KCOV_INIT_TRACE, KCOV_ENABLE, KCOV_DISABLE
-kcov_modes = KCOV_TRACE_PC, KCOV_TRACE_CMP
-
-legacy_mmap_number = __NR_mmap2
+_ = KCOV_INIT_TRACE, KCOV_ENABLE, KCOV_DISABLE, KCOV_TRACE_PC, KCOV_TRACE_CMP, __NR_mmap2
 
 # Not yet implemented syscalls
 #define __NR_umask 95

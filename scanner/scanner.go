@@ -1,26 +1,26 @@
 package scanner
 
 import (
-	"fmt"
-	"io/ioutil"
 	"bufio"
-	"strings"
+	"fmt"
+	"github.com/shankarapailoor/moonshine/logging"
+	"github.com/shankarapailoor/moonshine/straceTypes"
+	"io/ioutil"
 	"strconv"
-	"github.com/shankarapailoor/moonshine/strace_types"
-	. "github.com/shankarapailoor/moonshine/logging"
+	"strings"
 )
 
-const(
-	maxBufferSize = 64*1024*1024
-	CoverDelim = ","
-	CoverID = "Cover:"
-	SYSRESTART = "ERESTART"
-	SignalPlus = "+++"
-	SignalMinus = "---"
+const (
+	maxBufferSize = 64 * 1024 * 1024
+	CoverDelim    = ","
+	CoverID       = "Cover:"
+	SYSRESTART    = "ERESTART"
+	SignalPlus    = "+++"
+	SignalMinus   = "---"
 )
 
 func parseIps(line string) []uint64 {
-	line = line[1: len(line)-1] //Remove quotes
+	line = line[1 : len(line)-1] //Remove quotes
 	ips := strings.Split(strings.Split(line, CoverID)[1], CoverDelim)
 	cover_set := make(map[uint64]bool, 0)
 	cover := make([]uint64, 0)
@@ -41,10 +41,10 @@ func parseIps(line string) []uint64 {
 	return cover
 }
 
-func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
-	tree = strace_types.NewTraceTree()
+func parseLoop(scanner *bufio.Scanner) (tree *straceTypes.TraceTree) {
+	tree = straceTypes.NewTraceTree()
 	//Creating the process tree
-	var lastCall *strace_types.Syscall
+	var lastCall *straceTypes.Syscall
 	for scanner.Scan() {
 		line := scanner.Text()
 		restart := strings.Contains(line, SYSRESTART)
@@ -66,7 +66,7 @@ func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
 			}
 			call := lex.result
 			if call == nil {
-				Failf("Failed to parse line: %s\n", line)
+				logging.Failf("Failed to parse line: %s\n", line)
 			}
 			lastCall = tree.Add(call)
 			//trace.Calls = append(trace.Calls, call)
@@ -79,12 +79,12 @@ func parseLoop(scanner *bufio.Scanner) (tree *strace_types.TraceTree) {
 	return
 }
 
-func Parse(filename string) *strace_types.TraceTree {
+func Scan(filename string) *straceTypes.TraceTree {
 	var data []byte
 	var err error
 
 	if data, err = ioutil.ReadFile(filename); err != nil {
-		Failf("error reading file: %s\n", err.Error())
+		logging.Failf("error reading file: %s\n", err.Error())
 	}
 	buf := make([]byte, maxBufferSize)
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))

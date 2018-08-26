@@ -2,7 +2,7 @@
 package scanner
 
 import (
-    types "github.com/shankarapailoor/moonshine/strace_types"
+    types "github.com/shankarapailoor/moonshine/straceTypes"
     //"fmt"
 )
 %}

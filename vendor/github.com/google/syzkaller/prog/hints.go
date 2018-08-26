@@ -67,11 +67,8 @@ func (p *Prog) MutateWithHints(callIndex int, comps CompMap, exec func(p *Prog))
 	p = p.Clone()
 	c := p.Calls[callIndex]
 	execValidate := func() {
-		if debug {
-			if err := p.validate(); err != nil {
-				panic(fmt.Sprintf("invalid hints candidate: %v", err))
-			}
-		}
+		p.Target.SanitizeCall(c)
+		p.debugValidate()
 		exec(p)
 	}
 	ForeachArg(c, func(arg Arg, _ *ArgCtx) {
@@ -84,7 +81,7 @@ func generateHints(compMap CompMap, arg Arg, exec func()) {
 	if typ == nil || typ.Dir() == DirOut {
 		return
 	}
-	switch typ.(type) {
+	switch t := typ.(type) {
 	case *ProcType:
 		// Random proc will not pass validation.
 		// We can mutate it, but only if the resulting value is within the legal range.
@@ -92,6 +89,11 @@ func generateHints(compMap CompMap, arg Arg, exec func()) {
 	case *CsumType:
 		// Csum will not pass validation and is always computed.
 		return
+	case *BufferType:
+		if t.Kind == BufferFilename {
+			// This can generate escaping paths and is probably not too useful anyway.
+			return
+		}
 	}
 
 	switch a := arg.(type) {

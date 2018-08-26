@@ -5,7 +5,7 @@ import (
     "encoding/hex"
     "strconv"
     "strings"
-    "github.com/shankarapailoor/moonshine/strace_types"
+    "github.com/shankarapailoor/moonshine/straceTypes"
 )
 
 %%{
@@ -17,7 +17,7 @@ import (
 }%%
 
 type lexer struct {
-    result *strace_types.Syscall
+    result *straceTypes.Syscall
     data []byte
     p, pe, cs int
     ts, te, act int

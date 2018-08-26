@@ -267,7 +267,7 @@ v4l2_buffer_union [
 	offset	int32
 	userptr	intptr
 	planes	ptr[inout, v4l2_plane]
-	fd	fd_v4l2_buffer
+	fd	fd_v4l2_buffer[opt]
 ]
 
 v4l2_timecode {
@@ -291,7 +291,7 @@ v4l2_plane {
 v4l2_plane_union [
 	mem_offset	int32
 	userptr		intptr
-	fd		fd_v4l2_buffer
+	fd		fd_v4l2_buffer[opt]
 ]
 
 v4l2_framebuffer {
@@ -317,7 +317,7 @@ v4l2_exportbuffer {
 	index		int32
 	plane		int32
 	flags		flags[pipe_flags, int32]
-	fd		fd_dmabuf
+	fd		fd_dmabuf[opt]
 	reserved	array[const[0, int32], 11]
 }
 
@@ -455,9 +455,9 @@ v4l2_crop {
 v4l2_jpegcompression {
 	quality		int32
 	APPn		int32[0:15]
-	APP_len		len[APPn, int32]
+	APP_len		int32[0:60]
 	APP_data	array[int8, 60]
-	COM_len		len[COM_data, int32]
+	COM_len		int32[0:60]
 	COM_data	array[int8, 60]
 	jpeg_markers	flags[v4l2_jpeg_markers, int32]
 }
@@ -676,7 +676,7 @@ v4l2_event_motion_det {
 
 v4l2_event_subscription {
 	type		flags[v4l2_event_type, int32]
-	id		len[type, int32]
+	id		int32
 	flags		flags[v4l2_event_subscription_flags, int32]
 	reserved	array[const[0, int32], 5]
 }
