@@ -3,6 +3,8 @@ package trace2syz
 import (
 	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
+	"strconv"
+	"strings"
 )
 
 func parseInnerCall(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
@@ -68,32 +70,51 @@ func htonsHtonl(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
 }
 
 func inetAddr(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
-	unionType := syzType.(*prog.UnionType)
-	var optType prog.Type
-	var innerArg prog.Arg
+	var ip uint64
+	inet_addr := func (ipaddr string) uint64 {
+		var (
+			ip                 = strings.Split(ipaddr, ".")
+			ip1, ip2, ip3, ip4 uint64
+			ret                uint64
+		)
+		ip1, _ = strconv.ParseUint(ip[0], 10, 8)
+		ip2, _ = strconv.ParseUint(ip[1], 10, 8)
+		ip3, _ = strconv.ParseUint(ip[2], 10, 8)
+		ip4, _ = strconv.ParseUint(ip[3], 10, 8)
+		ret = ip1<<24 + ip2<<16 + ip3<<8 + ip4
+		return ret
+	}
 	if len(traceType.Args) > 1 {
 		panic("Parsing InetAddr...it has more than one arg.")
 	}
 	switch a := traceType.Args[0].(type) {
 	case *ipType:
-		switch a.Str {
-		case "0.0.0.0":
-			optType = unionType.Fields[0]
-		case "127.0.0.1":
-			optType = unionType.Fields[3]
-		case "255.255.255.255":
-			optType = unionType.Fields[6]
-		default:
-			optType = unionType.Fields[7]
-		}
-		innerArg = prog.DefaultArg(optType)
+		ip = inet_addr(a.Str)
 	default:
-		panic("Parsing inet_addr and inner arg has non ipv4 type")
+		log.Fatalf("Parsing inet_addr and inner arg has non ipv4 type")
 	}
-	return prog.MakeUnionArg(syzType, innerArg)
+	switch a := syzType.(type) {
+	case *prog.UnionType:
+		for _, field := range(a.Fields) {
+			if !strings.Contains(field.FieldName(), "rand") {
+				continue
+			}
+			switch field.(type) {
+			case *prog.IntType:
+				return prog.MakeUnionArg(syzType, prog.MakeConstArg(field, ip))
+			default:
+				log.Fatalf("Rand field isn't int type. Instead is %s", field.Name())
+			}
+		}
+	default:
+		log.Fatalf("Parsing ip address for non-union type %s", a.Name())
+	}
+	log.Logf(4, "Generating default arg for ip address")
+	return prog.DefaultArg(syzType)
 }
 
 func inetPton(syzType prog.Type, traceType *call, ctx *Context) prog.Arg {
+	log.Logf(4, "type name: %s", syzType.Name())
 	unionType := syzType.(*prog.UnionType)
 	var optType prog.Type
 	var innerArg prog.Arg

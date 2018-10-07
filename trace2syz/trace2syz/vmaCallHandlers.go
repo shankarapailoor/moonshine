@@ -6,32 +6,28 @@ import (
 	"github.com/google/syzkaller/prog"
 )
 
-const (
-	pageSize   = 4096
-	MapFixed   = "MAP_FIXED"
-	RemapFixed = "MREMAP_FIXED"
-)
-
 func ParseMemoryCall(ctx *Context) *prog.Call {
 	syzCall := ctx.CurrentSyzCall
 	straceCall := ctx.CurrentStraceCall
-	if straceCall.CallName == "mmap" {
+
+	switch straceCall.CallName {
+	case "mmap":
 		return ParseMmap(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "mremap" {
+	case "mremap":
 		return ParseMremap(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "msync" {
+	case "msync":
 		return ParseMsync(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "mprotect" {
+	case "mprotect":
 		return ParseMprotect(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "munmap" {
-		return ParseMunmap(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "madvise" {
+	case "munmap":
+		return ParseMprotect(syzCall.Meta, straceCall, ctx)
+	case "madvise":
 		return ParseMadvise(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "mlock" {
+	case "mlock":
 		return ParseMlock(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "munlock" {
+	case "munlock":
 		return ParseMunlock(syzCall.Meta, straceCall, ctx)
-	} else if straceCall.CallName == "shmat" {
+	case "shmat":
 		return ParseShmat(syzCall.Meta, straceCall, ctx)
 	}
 	return nil
@@ -44,7 +40,7 @@ func ParseMmap(mmap *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call {
 	}
 	ctx.CurrentSyzCall = call
 
-	length := (ParseLength(syscall.Args[1], ctx)/pageSize + 1) * pageSize
+	length := (ParseLength(syscall.Args[1], ctx)/ctx.Target.PageSize + 1) * ctx.Target.PageSize
 	log.Logf(3, "mmap call: %#v requires %d memory", syscall, length)
 	addrArg, start := ParseAddr(length, mmap.Args[0], syscall.Args[0], ctx)
 	lengthArg := prog.MakeConstArg(mmap.Args[1], length)
@@ -72,7 +68,7 @@ func ParseMremap(mremap *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Cal
 	}
 	ctx.CurrentSyzCall = call
 
-	oldAddrArg, start := ParseAddr(pageSize, mremap.Args[0], syscall.Args[0], ctx)
+	oldAddrArg, start := ParseAddr(ctx.Target.PageSize, mremap.Args[0], syscall.Args[0], ctx)
 	oldSz := ParseLength(syscall.Args[1], ctx)
 	newSz := ParseLength(syscall.Args[2], ctx)
 	oldSzArg := prog.MakeConstArg(mremap.Args[1], oldSz)
@@ -81,10 +77,10 @@ func ParseMremap(mremap *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Cal
 	var destAddrArg prog.Arg
 	var destAddr uint64
 	if len(syscall.Args) > 4 {
-		destAddrArg, destAddr = ParseAddr(pageSize, mremap.Args[4], syscall.Args[4], ctx)
+		destAddrArg, destAddr = ParseAddr(ctx.Target.PageSize, mremap.Args[4], syscall.Args[4], ctx)
 	} else {
 		straceAddrArg := newExpression(newIntType(syscall.Ret))
-		destAddrArg, destAddr = ParseAddr(pageSize, mremap.Args[4], straceAddrArg, ctx)
+		destAddrArg, destAddr = ParseAddr(ctx.Target.PageSize, mremap.Args[4], straceAddrArg, ctx)
 	}
 	AddDependency(start, oldSz, oldAddrArg, ctx)
 	call.Args = []prog.Arg{
@@ -107,7 +103,7 @@ func ParseMsync(msync *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call 
 	}
 	ctx.CurrentSyzCall = call
 
-	addrArg, address := ParseAddr(pageSize, msync.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, msync.Args[0], syscall.Args[0], ctx)
 	length = ParseLength(syscall.Args[1], ctx)
 	lengthArg := prog.MakeConstArg(msync.Args[1], length)
 	protArg := ParseFlags(msync.Args[2], syscall.Args[2], ctx, false)
@@ -127,7 +123,7 @@ func ParseMprotect(mprotect *prog.Syscall, syscall *Syscall, ctx *Context) *prog
 	}
 	ctx.CurrentSyzCall = call
 
-	addrArg, address := ParseAddr(pageSize, mprotect.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, mprotect.Args[0], syscall.Args[0], ctx)
 	length := ParseLength(syscall.Args[1], ctx)
 	lengthArg := prog.MakeConstArg(mprotect.Args[1], length)
 	protArg := ParseFlags(mprotect.Args[2], syscall.Args[2], ctx, false)
@@ -147,7 +143,7 @@ func ParseMunmap(munmap *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Cal
 	}
 	ctx.CurrentSyzCall = call
 
-	addrArg, address := ParseAddr(pageSize, munmap.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, munmap.Args[0], syscall.Args[0], ctx)
 	length := ParseLength(syscall.Args[1], ctx)
 	lengthArg := prog.MakeConstArg(munmap.Args[1], length)
 	AddDependency(address, length, addrArg, ctx)
@@ -165,7 +161,7 @@ func ParseMadvise(madvise *prog.Syscall, syscall *Syscall, ctx *Context) *prog.C
 	}
 	ctx.CurrentSyzCall = call
 
-	addrArg, address := ParseAddr(pageSize, madvise.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, madvise.Args[0], syscall.Args[0], ctx)
 	length := ParseLength(syscall.Args[1], ctx)
 	lengthArg := prog.MakeConstArg(madvise.Args[1], length)
 	var adviceArg prog.Arg
@@ -173,7 +169,7 @@ func ParseMadvise(madvise *prog.Syscall, syscall *Syscall, ctx *Context) *prog.C
 	case *expression:
 		adviceArg = prog.MakeConstArg(madvise.Args[2], a.Eval(ctx.Target))
 	default:
-		panic("Madvise advice arg is not expression")
+		log.Fatalf("Madvise advice arg is not expression")
 	}
 	AddDependency(address, length, addrArg, ctx)
 	call.Args = []prog.Arg{
@@ -191,7 +187,7 @@ func ParseMlock(mlock *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call 
 	}
 	ctx.CurrentSyzCall = call
 
-	addrArg, address := ParseAddr(pageSize, mlock.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, mlock.Args[0], syscall.Args[0], ctx)
 	length := ParseLength(syscall.Args[1], ctx)
 	flagArg := prog.MakeConstArg(mlock.Args[1], length)
 	AddDependency(address, length, addrArg, ctx)
@@ -208,7 +204,7 @@ func ParseMunlock(munlock *prog.Syscall, syscall *Syscall, ctx *Context) *prog.C
 		Ret:  prog.MakeReturnArg(munlock.Ret),
 	}
 	ctx.CurrentSyzCall = call
-	addrArg, address := ParseAddr(pageSize, munlock.Args[0], syscall.Args[0], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, munlock.Args[0], syscall.Args[0], ctx)
 	length := ParseLength(syscall.Args[1], ctx)
 	flagArg := prog.MakeConstArg(munlock.Args[1], length)
 	AddDependency(address, length, addrArg, ctx)
@@ -252,7 +248,7 @@ func ParseShmat(shmat *prog.Syscall, syscall *Syscall, ctx *Context) *prog.Call 
 		fd = prog.MakeResultArg(shmat.Args[0], nil, shmid)
 	}
 
-	addrArg, address := ParseAddr(pageSize, shmat.Args[1], syscall.Args[1], ctx)
+	addrArg, address := ParseAddr(ctx.Target.PageSize, shmat.Args[1], syscall.Args[1], ctx)
 	flags := ParseFlags(shmat.Args[2], syscall.Args[2], ctx, false)
 
 	call.Args = []prog.Arg{
@@ -288,8 +284,9 @@ func ParseAddr(length uint64, syzType prog.Type, traceType irType, ctx *Context)
 		addrStart := a.Eval(ctx.Target)
 		return prog.MakeVmaPointerArg(syzType, defAddrStart, length), addrStart
 	default:
-		panic("Failed to parse mmap")
+		log.Fatalf("Failed to parse mmap")
 	}
+	return nil, 0
 }
 
 func AddDependency(start, length uint64, addr prog.Arg, ctx *Context) {
@@ -311,22 +308,24 @@ func ParseLength(straceType irType, ctx *Context) uint64 {
 	case *expression:
 		return a.Eval(ctx.Target)
 	default:
-		panic("Parsing Mmap length but type is not expression")
+		log.Fatalf("Parsing Mmap length but type is not expression")
 	}
+	return 0
 }
 
 func ParseFlags(syzType prog.Type, straceType irType, ctx *Context, mapFlag bool) prog.Arg {
 	switch a := straceType.(type) {
 	case *expression:
 		if mapFlag {
-			val := a.Eval(ctx.Target) | GetFixedFlag(ctx)
+			val := a.Eval(ctx.Target)
 			return prog.MakeConstArg(syzType, val)
 		}
 		return prog.MakeConstArg(syzType, a.Eval(ctx.Target))
 
 	default:
-		panic("Parsing Flags")
+		log.Fatalf("Parsing Flags")
 	}
+	return nil
 }
 
 func ParseFd(syzType prog.Type, straceType irType, ctx *Context) prog.Arg {
@@ -344,14 +343,7 @@ func ParseFd(syzType prog.Type, straceType irType, ctx *Context) prog.Arg {
 	case *expression:
 		return prog.MakeResultArg(syzType, nil, a.Eval(ctx.Target))
 	default:
-		panic("Failed to Parse Fd because type is not Expression")
+		log.Fatalf("Failed to Parse Fd because type is not Expression")
 	}
-}
-
-func GetFixedFlag(ctx *Context) uint64 {
-	callName := ctx.CurrentStraceCall.CallName
-	if callName == "mmap" {
-		return ctx.Target.ConstMap[MapFixed]
-	}
-	return ctx.Target.ConstMap[RemapFixed]
+	return nil
 }

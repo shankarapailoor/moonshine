@@ -46,7 +46,7 @@ func TestParseLoopBasic(t *testing.T) {
 
 	for _, test := range tests {
 		scanner := initialize(test)
-		tree := parseLoop(scanner, Strace)
+		tree := parseLoop(scanner)
 		if tree.RootPid != -1 {
 			t.Fatalf("Incorrect Root Pid: %d\n", tree.RootPid)
 		}
@@ -71,7 +71,7 @@ func TestParseLoopPid(t *testing.T) {
 		`1  fstat() = 0`
 
 	scanner := initialize(data)
-	tree := parseLoop(scanner, Strace)
+	tree := parseLoop(scanner)
 	if tree.RootPid != 1 {
 		t.Fatalf("Incorrect Root Pid: %d\n", tree.RootPid)
 	}
@@ -91,7 +91,7 @@ func TestParseLoop1Child(t *testing.T) {
 		`2 read() = 16`
 
 	scanner := initialize(data1Child)
-	tree := parseLoop(scanner, Strace)
+	tree := parseLoop(scanner)
 	if len(tree.Ptree) != 2 {
 		t.Fatalf("Incorrect Root Pid. Expected: 2, Got %d\n", tree.RootPid)
 	}
@@ -111,7 +111,7 @@ func TestParseLoop2Childs(t *testing.T) {
 		`1 clone() = 3` + "\n" +
 		`3 open() = 3`
 	scanner := initialize(data2Childs)
-	tree := parseLoop(scanner, Strace)
+	tree := parseLoop(scanner)
 	if len(tree.Ptree) != 3 {
 		t.Fatalf("Incorrect Root Pid. Expected: 3, Got %d\n", tree.RootPid)
 	}
@@ -126,7 +126,7 @@ func TestParseLoop1Grandchild(t *testing.T) {
 		`2 clone() = 3` + "\n" +
 		`3 open() = 4`
 	scanner := initialize(data1Grandchild)
-	tree := parseLoop(scanner, Strace)
+	tree := parseLoop(scanner)
 	if len(tree.Ptree[tree.RootPid]) != 1 {
 		t.Fatalf("Expect RootPid to have 1 child. Got %d\n", tree.RootPid)
 	}
@@ -141,7 +141,7 @@ func TestParseLoopIrTypes(t *testing.T) {
 	data := `open(MAKEDEV(1), {1, field1="\xff\xff", {1, 2, 3}` +
 		`, [1, 2, 3], [1 2], field2=inet_pton("\xff\xff"), NULL, c_cc[VMIN]=1}, TCSETS or TCGETS) = 3`
 	scanner := initialize(data)
-	tree := parseLoop(scanner, Strace)
+	tree := parseLoop(scanner)
 	syscall := tree.TraceMap[tree.RootPid].Calls[0]
 	switch a := syscall.Args[0].(type) {
 	case *expression:

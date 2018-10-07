@@ -14,7 +14,7 @@ type State struct {
 	Files       map[string][]*prog.Call
 	Resources   map[string][]prog.Arg
 	Strings     map[string]*prog.Call
-	Pages       [maxPages]bool
+	Pages       []bool
 	Tracker     *MemoryTracker
 	CurrentCall *prog.Call
 }
@@ -28,6 +28,7 @@ func newState(target *prog.Target) *State {
 		Tracker:     newTracker(),
 		CurrentCall: nil,
 	}
+	s.Pages = make([]bool, target.NumPages)
 	return s
 }
 
@@ -56,10 +57,6 @@ func (s *State) analyze(c *prog.Call) {
 						// This is not our file, probalby one of specialFiles.
 						return
 					}
-					/*
-						if val[len(val)-1] == 0 {
-							val = val[:len(val)-1]
-						}*/
 					if s.Files[val] == nil {
 						s.Files[val] = make([]*prog.Call, 0)
 					}

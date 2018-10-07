@@ -41,16 +41,13 @@ func parseIps(line string) []uint64 {
 	return cover
 }
 
-func parseSyscall(scanner *bufio.Scanner, traceType string) (int, *Syscall) {
-	if strings.ToLower(traceType) == Strace {
-		lex := newStraceLexer(scanner.Bytes())
-		ret := StraceParse(lex)
-		return ret, lex.result
-	}
-	return -1, nil
+func parseSyscall(scanner *bufio.Scanner) (int, *Syscall) {
+	lex := newStraceLexer(scanner.Bytes())
+	ret := StraceParse(lex)
+	return ret, lex.result
 }
 
-func parseLoop(scanner *bufio.Scanner, traceType string) (tree *TraceTree) {
+func parseLoop(scanner *bufio.Scanner) (tree *TraceTree) {
 	tree = NewTraceTree()
 	//Creating the process tree
 	var lastCall *Syscall
@@ -65,22 +62,19 @@ func parseLoop(scanner *bufio.Scanner, traceType string) (tree *TraceTree) {
 		} else if strings.Contains(line, coverID) {
 			cover := parseIps(line)
 			log.Logf(4, "Cover: %d", len(cover))
-			//fmt.Printf("Cover: %d\n", len(cover))
 			lastCall.Cover = cover
 			continue
 
 		} else {
-			log.Logf(4, "Scanning call: %s\n", line)
-			ret, call := parseSyscall(scanner, traceType)
+			log.Logf(4, "Scanning call: %s", line)
+			ret, call := parseSyscall(scanner)
 			if ret != 0 {
-				log.Logf(0, "Error parsing line: %s\n", line)
+				log.Logf(0, "Error parsing line: %s", line)
 			}
 			if call == nil {
-				log.Fatalf("Failed to parse line: %s\n", line)
+				log.Fatalf("Failed to parse line: %s", line)
 			}
 			lastCall = tree.Add(call)
-			//trace.Calls = append(trace.Calls, call)
-			//fmt.Printf("result: %v\n", lex.result.CallName)
 		}
 	}
 	if len(tree.Ptree) == 0 {
@@ -90,18 +84,18 @@ func parseLoop(scanner *bufio.Scanner, traceType string) (tree *TraceTree) {
 }
 
 //Parse parses a trace of system calls and returns an intermediate representation
-func Parse(filename string, traceType string) *TraceTree {
+func Parse(filename string) *TraceTree {
 	var data []byte
 	var err error
 
 	if data, err = ioutil.ReadFile(filename); err != nil {
-		log.Fatalf("error reading file: %s\n", err.Error())
+		log.Fatalf("error reading file: %s", err.Error())
 	}
 	buf := make([]byte, maxBufferSize)
 	scanner := bufio.NewScanner(strings.NewReader(string(data)))
 	scanner.Buffer(buf, maxBufferSize)
 
-	tree := parseLoop(scanner, traceType)
+	tree := parseLoop(scanner)
 	if tree != nil {
 		tree.Filename = filename
 	}

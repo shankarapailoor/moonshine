@@ -2,12 +2,11 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"github.com/google/syzkaller/pkg/db"
 	"github.com/google/syzkaller/pkg/hash"
 	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
-	"github.com/google/syzkaller/sys"
+	_ "github.com/google/syzkaller/sys"
 	"github.com/shankarapailoor/moonshine/trace2syz/trace2syz"
 	"io/ioutil"
 	"os"
@@ -20,7 +19,7 @@ import (
 var (
 	flagFile      = flag.String("file", "", "file to parse")
 	flagDir       = flag.String("dir", "", "director to parse")
-	flagTraceType = flag.String("traceType", trace2syz.Strace, "Type of trace e.g., strace, perf")
+	variantMap    = trace2syz.NewCall2VariantMap()
 )
 
 const (
@@ -30,56 +29,48 @@ const (
 )
 
 func main() {
-	rev := sys.GitRevision
 	flag.Parse()
 	target, err := prog.GetTarget(OS, Arch)
 	if err != nil {
-		log.Fatalf("error getting target: %v, git revision: %v", err.Error(), rev)
-	} else {
-		parseTraces(target)
-		log.Logf(0, "Successfully converted traces. Generating corpus.db\n")
-		pack("deserialized", "corpus.db")
+		log.Fatalf("error getting target: %v", err.Error())
 	}
+	variantMap.Build(target)
+	parseTraces(target)
+	log.Logf(0, "Successfully converted traces. Generating corpus.db")
+	pack("deserialized", "corpus.db")
 }
 
 func parseTraces(target *prog.Target) []*trace2syz.Context {
 	ret := make([]*trace2syz.Context, 0)
 	names := make([]string, 0)
-	traceType := trace2syz.Strace
+
 	if *flagFile != "" {
 		names = append(names, *flagFile)
 	} else if *flagDir != "" {
 		names = getTraceFiles(*flagDir)
 	} else {
-		panic("Flag or FlagDir required")
-	}
-
-	if *flagTraceType != "" {
-		traceType = *flagTraceType
+		log.Fatalf("Flag or FlagDir required")
 	}
 
 	totalFiles := len(names)
-	log.Logf(0, "Parsing %d traces\n", totalFiles)
+	log.Logf(0, "Parsing %d traces", totalFiles)
 	for i, file := range names {
-		log.Logf(1, "Parsing File %d/%d: %s\n", i+1, totalFiles, path.Base(names[i]))
-		tree := trace2syz.Parse(file, traceType)
+		log.Logf(1, "Parsing File %d/%d: %s", i+1, totalFiles, path.Base(names[i]))
+		tree := trace2syz.Parse(file)
 		if tree == nil {
-			log.Logf(1, "File: %s is empty\n", path.Base(file))
+			log.Logf(1, "File: %s is empty", path.Base(file))
 			continue
 		}
 		ctxs := parseTree(tree, tree.RootPid, target)
 		ret = append(ret, ctxs...)
 		for i, ctx := range ctxs {
 			ctx.Prog.Target = ctx.Target
-			if err := ctx.FillOutMemory(); err != nil {
-				log.Logf(1, "Failed to fill out memory\n")
-				continue
-			}
+			ctx.FillOutMemory()
 			if err := ctx.Prog.Validate(); err != nil {
-				panic(fmt.Sprintf("Error validating program: %s\n", err.Error()))
+				log.Fatalf("Error validating program: %s", err)
 			}
 			if progIsTooLarge(ctx.Prog) {
-				log.Logf(1, "Prog is too large\n")
+				log.Logf(1, "Prog is too large")
 				continue
 			}
 			progName := "deserialized/" + filepath.Base(file) + strconv.Itoa(i)
@@ -102,13 +93,14 @@ func progIsTooLarge(p *prog.Prog) bool {
 
 func getTraceFiles(dir string) []string {
 	names := make([]string, 0)
-	if infos, err := ioutil.ReadDir(dir); err == nil {
-		for _, info := range infos {
-			name := path.Join(dir, info.Name())
-			names = append(names, name)
-		}
-	} else {
-		log.Fatalf("Failed to read dir: %s\n", err.Error())
+	infos, err := ioutil.ReadDir(dir)
+	if err != nil {
+		log.Fatalf("Failed to read dir: %s", err.Error())
+
+	}
+	for _, info := range infos {
+		name := path.Join(dir, info.Name())
+		names = append(names, name)
 	}
 	return names
 }
@@ -116,22 +108,11 @@ func getTraceFiles(dir string) []string {
 //parseTree groups system calls in the trace by process id.
 //The tree preserves process hierarchy i.e. parent->[]child
 func parseTree(tree *trace2syz.TraceTree, pid int64, target *prog.Target) []*trace2syz.Context {
-	log.Logf(2, "Parsing trace: %s\n", tree.Filename)
-	ctxs := make([]*trace2syz.Context, 0)
-	ctx, err := trace2syz.ParseTrace(tree.TraceMap[pid], target)
-	parsedProg := ctx.Prog
-	if err != nil {
-		panic("Failed to parse program")
-	}
+	log.Logf(2, "Parsing trace: %s", tree.Filename)
+	var ctxs []*trace2syz.Context
+	ctx := trace2syz.GenSyzProg(tree.TraceMap[pid], target, variantMap)
 
-	if len(parsedProg.Calls) == 0 {
-		parsedProg = nil
-	}
-
-	if parsedProg != nil {
-		ctx.Prog = parsedProg
-		ctxs = append(ctxs, ctx)
-	}
+	ctxs = append(ctxs, ctx)
 	for _, childPid := range tree.Ptree[pid] {
 		if tree.TraceMap[childPid] != nil {
 			ctxs = append(ctxs, parseTree(tree, childPid, target)...)
@@ -148,10 +129,10 @@ func pack(dir, file string) {
 	}
 	os.Remove(file)
 	syzDb, err := db.Open(file)
-	syzDb.BumpVersion(currentDBVersion)
 	if err != nil {
 		log.Fatalf("failed to open database file: %v", err)
 	}
+	syzDb.BumpVersion(currentDBVersion)
 	log.Logf(1, "Deserializing programs => deserialized/")
 	for _, file := range files {
 		data, err := ioutil.ReadFile(filepath.Join(dir, file.Name()))

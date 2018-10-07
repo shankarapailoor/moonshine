@@ -21,8 +21,7 @@ func bpfFramedProgramHandler(syzType *prog.StructType, traceType irType, ctx *Co
 	switch a := traceType.(type) {
 	case *arrayType:
 		straceStructArgs := make([]irType, len(syzType.Fields))
-		arrType := a
-		straceStructArgs[1] = arrType
+		straceStructArgs[1] = a
 		straceArg0 := genDefaultTraceType(syzType.Fields[0])
 		straceStructArgs[0] = straceArg0
 		straceStructArgs = append(straceStructArgs, genDefaultTraceType(syzType.Fields[1]))

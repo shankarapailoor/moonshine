@@ -2,6 +2,7 @@ package trace2syz
 
 import (
 	"github.com/google/syzkaller/pkg/log"
+
 	"path/filepath"
 	"strings"
 )
