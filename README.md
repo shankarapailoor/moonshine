@@ -8,6 +8,7 @@ MoonShine selects compact and diverse seeds for OS fuzzers from system call trac
     * [Build and Run MoonShine](#build-and-run-moonshine)
     * [Collecting Traces](#collecting-traces)
     * [Setup Syzkaller](#syzkaller-and-linux)
+* [Integrating MoonShine into Syzkaller](#integrating-moonshine-into-syzkaller)
 * [Project Structure](#project-structure)
 * [Trophies](#trophies)
 * [Contributors](#contributors)
@@ -126,6 +127,11 @@ $ make
 ```bash
 $ strace -o tracefile -s 65500 -v -xx -f -k /path/to/executable arg1 arg2 .. argN
 ```
+
+# Integrating MoonShine into Syzkaller
+
+We are actively working with Syzkaller maintainers to add MoonShine as a collection of Syzkaller tools. Our current plan is to break MoonShine into two tools. The first converts strace-output to Syzkaller programs, and the second distills the generated programs. We have a pull request for the first tool [here](https://github.com/google/syzkaller/pull/767) where you can see the current status. We also have an active email thread on Syzkaller google group [here](https://groups.google.com/forum/#!topic/syzkaller/TeM0XNaMzyk) where you can follow ongoing discussions.  After this has been integrated, we will create a PR for the second.
+
 # Project Structure
 
 MoonShine's code is concentrated in 5 directories:
