@@ -1,6 +1,7 @@
 package distiller
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
 	"fmt"
 	"sort"
@@ -67,12 +68,19 @@ func (d *ExplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	}
 	fmt.Printf("Total Distilled Progs: %d\n", len(distilledProgs))
 	for prog_, _ := range distilledProgs {
-		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
+		parentProg := d.CallToSeed[prog_.Calls[0]].Prog
+		memoryTracker := d.CallToSeed[prog_.Calls[0]].State.Tracker
+		newMemoryTracker := memoryTracker.Simplify(parentProg, prog_)
+		for _, call := range prog_.Calls {
+			log.Logf(3, "%s", call.Meta.CallName)
+		}
+		if err := newMemoryTracker.FillOutMemory(prog_); err != nil {
+			log.Logf(2, "Error filling out memory for distilled prog: %s", err)
 			//fmt.Printf("Error: %s\n", err.Error())
-            		continue
+			continue
 		}
 
-		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
+		totalMemoryAllocations := newMemoryTracker.GetTotalMemoryAllocations(prog_)
 		calls := make([]*prog.Call, 0)
 		state := d.CallToSeed[prog_.Calls[0]].State
 		if totalMemoryAllocations > 0 {

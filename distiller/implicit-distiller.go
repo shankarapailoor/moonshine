@@ -1,6 +1,7 @@
 package distiller
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
 	"github.com/shankarapailoor/moonshine/implicit-dependencies"
 	"fmt"
@@ -44,7 +45,7 @@ func (d *ImplicitDistiller) getHeavyHitters(seeds Seeds) Seeds {
 			contributing_seeds += 1
 		}
 	}
-	fmt.Printf("TOTAL HEAVY HITTERS: %d\n", contributing_seeds)
+	log.Logf(2, "TOTAL HEAVY HITTERS: %d\n", contributing_seeds)
 	return heavyHitters
 }
 
@@ -85,11 +86,15 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 	}
 	fmt.Printf("Total Distilled Progs: %d\n", len(distilledProgs))
 	for prog_, _ := range distilledProgs {
-		if err := d.CallToSeed[prog_.Calls[0]].State.Tracker.FillOutMemory(prog_); err != nil {
-			//fmt.Printf("Error: %s\n", err.Error())
+		log.Logf(5, "Filling out prog")
+		parentProg := d.CallToSeed[prog_.Calls[0]].Prog
+		memoryTracker := d.CallToSeed[prog_.Calls[0]].State.Tracker
+		newMemoryTracker := memoryTracker.Simplify(parentProg, prog_)
+		if err := newMemoryTracker.FillOutMemory(prog_); err != nil {
+			log.Logf(4, "Error filling out memory in distilled prog: %s", err)
 			continue
 		}
-		totalMemoryAllocations := d.CallToSeed[prog_.Calls[0]].State.Tracker.GetTotalMemoryAllocations(prog_)
+		totalMemoryAllocations := newMemoryTracker.GetTotalMemoryAllocations(prog_)
 		calls := make([]*prog.Call, 0)
 		state := d.CallToSeed[prog_.Calls[0]].State
 		if totalMemoryAllocations > 0 {
@@ -111,6 +116,9 @@ func (d *ImplicitDistiller) Distill(progs []*prog.Prog) (distilled []*prog.Prog)
 		}
 		progs_ += 1
 		totalLen += len(prog_.Calls)
+	}
+	if (progs_ == 0) {
+		return
 	}
 	avgLen := totalLen/progs_
 	fmt.Fprintf(os.Stderr, "Average Program Length: %d\n", avgLen)

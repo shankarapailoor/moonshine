@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	"github.com/google/syzkaller/prog"
 	"github.com/shankarapailoor/moonshine/strace_types"
 	"github.com/shankarapailoor/moonshine/tracker"
@@ -127,6 +128,7 @@ func ParseProg(trace *strace_types.Trace, target *prog.Target) (*Context, error)
 	for _, s_call := range trace.Calls {
 		ctx.CurrentStraceCall = s_call
 		if _, ok := strace_types.Unsupported[s_call.CallName]; ok {
+			log.Logf(2, "Skipping unsupported: %s", s_call.CallName)
 			continue
 		}
 		if s_call.Paused {
@@ -144,6 +146,7 @@ func ParseProg(trace *strace_types.Trace, target *prog.Target) (*Context, error)
 		}
 		if call, err := parseCall(ctx); err == nil {
 			if call == nil {
+				log.Logf(2, "Call is nil: %s", s_call.CallName)
 				continue
 			}
 			ctx.CallToCover[call] = s_call.Cover

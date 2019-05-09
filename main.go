@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/google/syzkaller/pkg/log"
 	. "github.com/shankarapailoor/moonshine/scanner"
 	. "github.com/shankarapailoor/moonshine/parser"
 	"github.com/google/syzkaller/prog"
@@ -81,13 +82,14 @@ func ParseTraces(target *prog.Target) []*Context {
 			continue
 		}
 		ctxs := ParseTree(tree, tree.RootPid, target)
+		log.Logf(2, "Context size: ", len(ctxs))
 		ret = append(ret, ctxs...)
 		i := 0
 		for _, ctx := range ctxs {
 			ctx.Prog.Target = ctx.Target
 			if !distill {
 				if err := FillOutMemory(ctx.Prog, ctx.State.Tracker); err != nil {
-					//fmt.Fprintln(os.Stderr, "Failed to fill out memory")
+					log.Logf(2, "Failed to fill out memory: %s", err)
 					continue
 				}
 				if progIsTooLarge(ctx.Prog) {
@@ -113,6 +115,7 @@ func ParseTraces(target *prog.Target) []*Context {
 		distler := distiller.NewDistiller(config.NewDistillConfig(*flagDistill))
 		distler.Add(seeds)
 		distilledProgs := distler.Distill(GetProgs(ret))
+		log.Logf(2, "Distilled Progs: ", len(distilledProgs))
 		for i, prog_ := range distilledProgs {
 			if progIsTooLarge(prog_) {
 				fmt.Fprintln(os.Stderr, "Prog is too large")

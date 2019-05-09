@@ -2,6 +2,7 @@ package tracker
 
 import (
 	"fmt"
+	"github.com/google/syzkaller/pkg/log"
 	. "github.com/google/syzkaller/prog"
 )
 
@@ -187,11 +188,58 @@ func (m *MemoryTracker) TrackDependency(arg Arg, start uint64, end uint64, mappi
 	mapping.usedBy = append(mapping.usedBy, dependency)
 }
 
+func (m *MemoryTracker) Simplify(prog *Prog, distilled *Prog) *MemoryTracker {
+	distilledCalls := make(map[*Call]bool)
+	newTracker := new(MemoryTracker)
+	newTracker.shm_requests = make([]*ShmRequest, 0)
+	newTracker.mappings = make([]*VirtualMapping, 0)
+	newTracker.allocations = make(map[*Call][]*Allocation)
+	for _, call := range distilled.Calls {
+		distilledCalls[call] = true
+	}
+	for call, all := range m.allocations {
+		if ok := distilledCalls[call]; ok {
+			newTracker.allocations[call] = all
+		}
+	}
+	for _, mapping := range m.mappings {
+		if ok := distilledCalls[mapping.createdBy]; !ok {
+			continue
+		}
+		newMapping := new(VirtualMapping)
+		newMapping.createdBy = mapping.createdBy
+		newMapping.end = mapping.end
+		newMapping.start = mapping.start
+		newMapping.usedBy = make([]*MemDependency, 0)
+		// The address argument of the mapping is a used-by dependency itself
+		// and it is always the first argument.
+		newMapping.usedBy = append(newMapping.usedBy, mapping.usedBy[0])
+
+		for _, dep := range mapping.usedBy {
+			if ok := distilledCalls[prog.Calls[dep.Callidx]]; !ok {
+				continue
+			}
+			newMapping.usedBy = append(newMapping.usedBy, dep)
+		}
+		newTracker.mappings = append(newTracker.mappings, newMapping)
+	}
+	for _, shmRequest := range m.shm_requests {
+		if ok := distilledCalls[shmRequest.call]; !ok {
+			continue
+		}
+		newTracker.shm_requests = append(newTracker.shm_requests, shmRequest)
+	}
+	return newTracker
+}
+
+
 func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 	offset := uint64(0)
 
 	for _, call := range prog.Calls {
+		log.Logf(3, "call: %s", call.Meta.CallName)
 		if _, ok := m.allocations[call]; !ok {
+			log.Logf(3, "skipping allocations")
 			continue
 		}
 		i := 0
@@ -201,6 +249,7 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 				arg.Address = offset
 				offset += a.num_bytes
 				i += 1
+				log.Logf(5, "offset: %v/%v", offset, memAllocMaxMem)
 				if arg.Address >= memAllocMaxMem {
 					return fmt.Errorf("Unable to allocate space to store arg: %#v" +
 						"in Call: %v. Required memory is larger than what is allowed by Syzkaller." +
@@ -215,6 +264,7 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 	if offset % PageSize > 0 {
 		offset = (offset/PageSize+1)*PageSize
 	}
+	log.Logf(5, "Offset: %d", offset)
 
 	for _, mapping := range m.mappings {
 		for _, dep := range mapping.usedBy {
@@ -222,7 +272,7 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 			case *PointerArg:
 				//Offset should align with the start of a mapping/end of previous mapping.
 				arg_.Address = offset + dep.start - mapping.start
-
+				log.Logf(5, "Dep start: %v, end: %v, mapping: %v, address: %v", dep.start, dep.end, mapping.start, arg_.Address)
 				arg_.Res = nil
 				if arg_.Address >= memAllocMaxMem || arg_.Address+arg_.VmaSize > memAllocMaxMem{
 					return fmt.Errorf("Unable to allocate space for vma Call: %#v " +
@@ -235,6 +285,7 @@ func (m *MemoryTracker) FillOutMemory(prog *Prog) error {
 			}
 		}
 		offset += mapping.GetEnd() - mapping.GetStart()
+		log.Logf(5, "New offset: %v", offset)
 	}
 	return nil
 }
